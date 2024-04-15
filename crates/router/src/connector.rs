@@ -1,6 +1,7 @@
 pub mod aci;
 pub mod adyen;
 pub mod airwallex;
+pub mod archipel;
 pub mod authorizedotnet;
 pub mod bambora;
 pub mod bankofamerica;
@@ -63,8 +64,8 @@ pub mod zsl;
 pub use self::dummyconnector::DummyConnector;
 pub use self::{
     aci::Aci, adyen::Adyen, airwallex::Airwallex, authorizedotnet::Authorizedotnet,
-    bambora::Bambora, bankofamerica::Bankofamerica, billwerk::Billwerk, bitpay::Bitpay,
-    bluesnap::Bluesnap, boku::Boku, braintree::Braintree, cashtocode::Cashtocode,
+    archipel::Archipel, bambora::Bambora, bankofamerica::Bankofamerica, billwerk::Billwerk,
+    bitpay::Bitpay, bluesnap::Bluesnap, boku::Boku, braintree::Braintree, cashtocode::Cashtocode,
     checkout::Checkout, coinbase::Coinbase, cryptopay::Cryptopay, cybersource::Cybersource,
     dlocal::Dlocal, ebanx::Ebanx, fiserv::Fiserv, forte::Forte, globalpay::Globalpay,
     globepay::Globepay, gocardless::Gocardless, helcim::Helcim, iatapay::Iatapay, klarna::Klarna,

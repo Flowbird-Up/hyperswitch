@@ -14,6 +14,9 @@ api_secret = "Secondary key"
 api_key = "MyMerchantName"
 key1 = "MyTransactionKey"
 
+[archipel]
+api_key="API Key"
+
 [checkout]
 api_key = "PublicKey"
 api_secret = "SecretKey"
