@@ -10,6 +10,7 @@ mod aci;
 mod adyen;
 mod airwallex;
 mod authorizedotnet;
+mod archipel;
 mod bambora;
 #[cfg(feature = "dummy_connector")]
 mod bankofamerica;

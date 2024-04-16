@@ -76,6 +76,7 @@ pub enum Connector {
     Adyen,
     Airwallex,
     Authorizedotnet,
+    Archipel,
     Bambora,
     Bankofamerica,
     Billwerk,
@@ -166,6 +167,7 @@ impl Connector {
             | Self::Adyen
             | Self::Airwallex
             | Self::Authorizedotnet
+            | Self::Archipel
             | Self::Bambora
             | Self::Bankofamerica
             | Self::Billwerk
