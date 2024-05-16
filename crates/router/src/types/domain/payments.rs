@@ -1,7 +1,6 @@
 use common_utils::pii::{self, Email};
 use masking::Secret;
 use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
 
 // We need to derive Serialize and Deserialize because some parts of payment method data are being
 // stored in the database as serde_json::Value
@@ -12,8 +11,8 @@ pub enum PaymentMethodData {
     Wallet(WalletData),
     PayLater(PayLaterData),
     BankRedirect(BankRedirectData),
-    BankDebit(api_models::payments::BankDebitData),
-    BankTransfer(Box<api_models::payments::BankTransferData>),
+    BankDebit(BankDebitData),
+    BankTransfer(Box<BankTransferData>),
     Crypto(CryptoData),
     MandatePayment,
     Reward,
@@ -65,27 +64,19 @@ pub enum CardRedirectData {
     CardRedirect {},
 }
 
-#[derive(Eq, PartialEq, Clone, Debug, serde::Deserialize, serde::Serialize, ToSchema)]
+#[derive(Eq, PartialEq, Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub enum PayLaterData {
-    KlarnaRedirect {
-        billing_email: Email,
-        billing_country: common_enums::CountryAlpha2,
-    },
-    KlarnaSdk {
-        token: String,
-    },
+    KlarnaRedirect {},
+    KlarnaSdk { token: String },
     AffirmRedirect {},
-    AfterpayClearpayRedirect {
-        billing_email: Email,
-        billing_name: Secret<String>,
-    },
+    AfterpayClearpayRedirect {},
     PayBrightRedirect {},
     WalleyRedirect {},
     AlmaRedirect {},
     AtomeRedirect {},
 }
 
-#[derive(Eq, PartialEq, Clone, Debug, serde::Deserialize, serde::Serialize, ToSchema)]
+#[derive(Eq, PartialEq, Clone, Debug, serde::Deserialize, serde::Serialize)]
 
 pub enum WalletData {
     AliPayQr(Box<AliPayQr>),
@@ -116,14 +107,14 @@ pub enum WalletData {
     SwishQr(SwishQrData),
 }
 
-#[derive(Eq, PartialEq, Clone, Debug, serde::Deserialize, serde::Serialize, ToSchema)]
+#[derive(Eq, PartialEq, Clone, Debug, serde::Deserialize, serde::Serialize)]
 
 pub struct SamsungPayWalletData {
     /// The encrypted payment token from Samsung
     pub token: Secret<String>,
 }
 
-#[derive(Eq, PartialEq, Clone, Debug, serde::Deserialize, serde::Serialize, ToSchema)]
+#[derive(Eq, PartialEq, Clone, Debug, serde::Deserialize, serde::Serialize)]
 
 pub struct GooglePayWalletData {
     /// The type of payment method
@@ -136,67 +127,64 @@ pub struct GooglePayWalletData {
     pub tokenization_data: GpayTokenizationData,
 }
 
-#[derive(Eq, PartialEq, Clone, Debug, serde::Deserialize, serde::Serialize, ToSchema)]
+#[derive(Eq, PartialEq, Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub struct ApplePayRedirectData {}
 
-#[derive(Eq, PartialEq, Clone, Debug, serde::Deserialize, serde::Serialize, ToSchema)]
+#[derive(Eq, PartialEq, Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub struct GooglePayRedirectData {}
 
-#[derive(Eq, PartialEq, Clone, Debug, serde::Deserialize, serde::Serialize, ToSchema)]
+#[derive(Eq, PartialEq, Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub struct GooglePayThirdPartySdkData {}
 
-#[derive(Eq, PartialEq, Clone, Debug, serde::Deserialize, serde::Serialize, ToSchema)]
+#[derive(Eq, PartialEq, Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub struct ApplePayThirdPartySdkData {}
 
-#[derive(Eq, PartialEq, Clone, Debug, serde::Deserialize, serde::Serialize, ToSchema)]
+#[derive(Eq, PartialEq, Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub struct WeChatPayRedirection {}
 
-#[derive(Eq, PartialEq, Clone, Debug, serde::Deserialize, serde::Serialize, ToSchema)]
+#[derive(Eq, PartialEq, Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub struct WeChatPay {}
 
-#[derive(Eq, PartialEq, Clone, Debug, serde::Deserialize, serde::Serialize, ToSchema)]
+#[derive(Eq, PartialEq, Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub struct WeChatPayQr {}
 
-#[derive(Eq, PartialEq, Clone, Debug, serde::Deserialize, serde::Serialize, ToSchema)]
+#[derive(Eq, PartialEq, Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub struct CashappQr {}
 
-#[derive(Eq, PartialEq, Clone, Debug, serde::Deserialize, serde::Serialize, ToSchema)]
+#[derive(Eq, PartialEq, Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub struct PaypalRedirection {
     /// paypal's email address
     pub email: Option<Email>,
 }
 
-#[derive(Eq, PartialEq, Clone, Debug, serde::Deserialize, serde::Serialize, ToSchema)]
+#[derive(Eq, PartialEq, Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub struct AliPayQr {}
 
-#[derive(Eq, PartialEq, Clone, Debug, serde::Deserialize, serde::Serialize, ToSchema)]
+#[derive(Eq, PartialEq, Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub struct AliPayRedirection {}
 
-#[derive(Eq, PartialEq, Clone, Debug, serde::Deserialize, serde::Serialize, ToSchema)]
+#[derive(Eq, PartialEq, Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub struct AliPayHkRedirection {}
 
-#[derive(Eq, PartialEq, Clone, Debug, serde::Deserialize, serde::Serialize, ToSchema)]
+#[derive(Eq, PartialEq, Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub struct MomoRedirection {}
 
-#[derive(Eq, PartialEq, Clone, Debug, serde::Deserialize, serde::Serialize, ToSchema)]
+#[derive(Eq, PartialEq, Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub struct KakaoPayRedirection {}
 
-#[derive(Eq, PartialEq, Clone, Debug, serde::Deserialize, serde::Serialize, ToSchema)]
+#[derive(Eq, PartialEq, Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub struct GoPayRedirection {}
 
-#[derive(Eq, PartialEq, Clone, Debug, serde::Deserialize, serde::Serialize, ToSchema)]
+#[derive(Eq, PartialEq, Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub struct GcashRedirection {}
 
-#[derive(Eq, PartialEq, Clone, Debug, serde::Deserialize, serde::Serialize, ToSchema)]
+#[derive(Eq, PartialEq, Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub struct MobilePayRedirection {}
 
-#[derive(Eq, PartialEq, Clone, Debug, serde::Deserialize, serde::Serialize, ToSchema)]
-pub struct MbWayRedirection {
-    /// Telephone number of the shopper. Should be Portuguese phone number.
-    pub telephone_number: Secret<String>,
-}
+#[derive(Eq, PartialEq, Clone, Debug, serde::Deserialize, serde::Serialize)]
+pub struct MbWayRedirection {}
 
-#[derive(Eq, PartialEq, Clone, Debug, serde::Deserialize, serde::Serialize, ToSchema)]
+#[derive(Eq, PartialEq, Clone, Debug, serde::Deserialize, serde::Serialize)]
 
 pub struct GooglePayPaymentMethodInfo {
     /// The name of the card network
@@ -205,19 +193,19 @@ pub struct GooglePayPaymentMethodInfo {
     pub card_details: String,
 }
 
-#[derive(Eq, PartialEq, Clone, Debug, serde::Deserialize, serde::Serialize, ToSchema)]
+#[derive(Eq, PartialEq, Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub struct PayPalWalletData {
     /// Token generated for the Apple pay
     pub token: String,
 }
 
-#[derive(Eq, PartialEq, Clone, Debug, serde::Deserialize, serde::Serialize, ToSchema)]
+#[derive(Eq, PartialEq, Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub struct TouchNGoRedirection {}
 
-#[derive(Eq, PartialEq, Clone, Debug, serde::Deserialize, serde::Serialize, ToSchema)]
+#[derive(Eq, PartialEq, Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub struct SwishQrData {}
 
-#[derive(Eq, PartialEq, Clone, Debug, serde::Deserialize, serde::Serialize, ToSchema)]
+#[derive(Eq, PartialEq, Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub struct GpayTokenizationData {
     /// The type of the token
     pub token_type: String,
@@ -225,7 +213,7 @@ pub struct GpayTokenizationData {
     pub token: String,
 }
 
-#[derive(Eq, PartialEq, Clone, Debug, serde::Deserialize, serde::Serialize, ToSchema)]
+#[derive(Eq, PartialEq, Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub struct ApplePayWalletData {
     /// The payment data of Apple pay
     pub payment_data: String,
@@ -235,53 +223,40 @@ pub struct ApplePayWalletData {
     pub transaction_identifier: String,
 }
 
-#[derive(Eq, PartialEq, Clone, Debug, serde::Deserialize, serde::Serialize, ToSchema)]
+#[derive(Eq, PartialEq, Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub struct ApplepayPaymentMethod {
     pub display_name: String,
     pub network: String,
     pub pm_type: String,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, serde::Deserialize, serde::Serialize, ToSchema)]
+#[derive(Debug, Clone, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 
 pub enum BankRedirectData {
     BancontactCard {
         card_number: Option<cards::CardNumber>,
         card_exp_month: Option<Secret<String>>,
         card_exp_year: Option<Secret<String>>,
-        card_holder_name: Option<Secret<String>>,
-        billing_details: Option<BankRedirectBilling>,
     },
     Bizum {},
     Blik {
         blik_code: Option<String>,
     },
     Eps {
-        billing_details: Option<BankRedirectBilling>,
         bank_name: Option<common_enums::BankNames>,
-        country: Option<common_enums::CountryAlpha2>,
     },
     Giropay {
-        billing_details: Option<BankRedirectBilling>,
         bank_account_bic: Option<Secret<String>>,
         bank_account_iban: Option<Secret<String>>,
-        country: Option<common_enums::CountryAlpha2>,
     },
     Ideal {
-        billing_details: Option<BankRedirectBilling>,
         bank_name: Option<common_enums::BankNames>,
-        country: Option<common_enums::CountryAlpha2>,
     },
-    Interac {
-        country: common_enums::CountryAlpha2,
-        email: Email,
-    },
+    Interac {},
     OnlineBankingCzechRepublic {
         issuer: common_enums::BankNames,
     },
-    OnlineBankingFinland {
-        email: Option<Email>,
-    },
+    OnlineBankingFinland {},
     OnlineBankingPoland {
         issuer: common_enums::BankNames,
     },
@@ -290,20 +265,14 @@ pub enum BankRedirectData {
     },
     OpenBankingUk {
         issuer: Option<common_enums::BankNames>,
-        country: Option<common_enums::CountryAlpha2>,
     },
     Przelewy24 {
         bank_name: Option<common_enums::BankNames>,
-        billing_details: BankRedirectBilling,
     },
     Sofort {
-        billing_details: Option<BankRedirectBilling>,
-        country: Option<common_enums::CountryAlpha2>,
         preferred_language: Option<String>,
     },
-    Trustly {
-        country: common_enums::CountryAlpha2,
-    },
+    Trustly {},
     OnlineBankingFpx {
         issuer: common_enums::BankNames,
     },
@@ -312,26 +281,19 @@ pub enum BankRedirectData {
     },
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, serde::Deserialize, serde::Serialize, ToSchema)]
-pub struct BankRedirectBilling {
-    pub billing_name: Option<Secret<String>>,
-    pub email: Option<Email>,
-}
-
-#[derive(Debug, Clone, Eq, PartialEq, serde::Deserialize, serde::Serialize, ToSchema)]
+#[derive(Debug, Clone, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
 pub struct CryptoData {
     pub pay_currency: Option<String>,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, serde::Deserialize, serde::Serialize, ToSchema)]
+#[derive(Debug, Clone, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
 pub struct UpiData {
-    #[schema(value_type = Option<String>, example = "successtest@iata")]
     pub vpa_id: Option<Secret<String, pii::UpiVpaMaskingStrategy>>,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize, ToSchema)]
+#[derive(Debug, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum VoucherData {
     Boleto(Box<BoletoVoucherData>),
@@ -350,83 +312,95 @@ pub enum VoucherData {
     PayEasy(Box<JCSVoucherData>),
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize, ToSchema)]
+#[derive(Debug, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct BoletoVoucherData {
     /// The shopper's social security number
-    #[schema(value_type = Option<String>)]
     pub social_security_number: Option<Secret<String>>,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize, ToSchema)]
-pub struct AlfamartVoucherData {
-    /// The billing first name for Alfamart
-    #[schema(value_type = String, example = "Jane")]
-    pub first_name: Secret<String>,
-    /// The billing second name for Alfamart
-    #[schema(value_type = String, example = "Doe")]
-    pub last_name: Option<Secret<String>>,
-    /// The Email ID for Alfamart
-    #[schema(value_type = String, example = "example@me.com")]
-    pub email: Email,
-}
+#[derive(Debug, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct AlfamartVoucherData {}
 
-#[derive(Debug, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize, ToSchema)]
-pub struct IndomaretVoucherData {
-    /// The billing first name for Alfamart
-    #[schema(value_type = String, example = "Jane")]
-    pub first_name: Secret<String>,
-    /// The billing second name for Alfamart
-    #[schema(value_type = String, example = "Doe")]
-    pub last_name: Option<Secret<String>>,
-    /// The Email ID for Alfamart
-    #[schema(value_type = String, example = "example@me.com")]
-    pub email: Email,
-}
+#[derive(Debug, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct IndomaretVoucherData {}
 
-#[derive(Debug, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize, ToSchema)]
-pub struct JCSVoucherData {
-    /// The billing first name for Japanese convenience stores
-    #[schema(value_type = String, example = "Jane")]
-    pub first_name: Secret<String>,
-    /// The billing second name Japanese convenience stores
-    #[schema(value_type = String, example = "Doe")]
-    pub last_name: Option<Secret<String>>,
-    /// The Email ID for Japanese convenience stores
-    #[schema(value_type = String, example = "example@me.com")]
-    pub email: Email,
-    /// The telephone number for Japanese convenience stores
-    #[schema(value_type = String, example = "9999999999")]
-    pub phone_number: String,
-}
+#[derive(Debug, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct JCSVoucherData {}
 
-#[derive(serde::Deserialize, serde::Serialize, Debug, Clone, ToSchema, Eq, PartialEq)]
+#[derive(serde::Deserialize, serde::Serialize, Debug, Clone, Eq, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum GiftCardData {
     Givex(GiftCardDetails),
     PaySafeCard {},
 }
 
-#[derive(serde::Deserialize, serde::Serialize, Debug, Clone, ToSchema, Eq, PartialEq)]
+#[derive(serde::Deserialize, serde::Serialize, Debug, Clone, Eq, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub struct GiftCardDetails {
     /// The gift card number
-    #[schema(value_type = String)]
     pub number: Secret<String>,
     /// The card verification code.
-    #[schema(value_type = String)]
     pub cvc: Secret<String>,
 }
 
-#[derive(Eq, PartialEq, Debug, serde::Deserialize, serde::Serialize, Clone, ToSchema, Default)]
+#[derive(Eq, PartialEq, Debug, serde::Deserialize, serde::Serialize, Clone, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct CardToken {
     /// The card holder's name
-    #[schema(value_type = String, example = "John Test")]
     pub card_holder_name: Option<Secret<String>>,
 
     /// The CVC number for the card
-    #[schema(value_type = Option<String>)]
     pub card_cvc: Option<Secret<String>>,
+}
+
+#[derive(serde::Deserialize, serde::Serialize, Debug, Clone, Eq, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum BankDebitData {
+    AchBankDebit {
+        account_number: Secret<String>,
+        routing_number: Secret<String>,
+        bank_name: Option<common_enums::BankNames>,
+        bank_type: Option<common_enums::BankType>,
+        bank_holder_type: Option<common_enums::BankHolderType>,
+    },
+    SepaBankDebit {
+        iban: Secret<String>,
+    },
+    BecsBankDebit {
+        account_number: Secret<String>,
+        bsb_number: Secret<String>,
+    },
+    BacsBankDebit {
+        account_number: Secret<String>,
+        sort_code: Secret<String>,
+    },
+}
+
+#[derive(Eq, PartialEq, Clone, Debug, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BankTransferData {
+    AchBankTransfer {},
+    SepaBankTransfer {},
+    BacsBankTransfer {},
+    MultibancoBankTransfer {},
+    PermataBankTransfer {},
+    BcaBankTransfer {},
+    BniVaBankTransfer {},
+    BriVaBankTransfer {},
+    CimbVaBankTransfer {},
+    DanamonVaBankTransfer {},
+    MandiriVaBankTransfer {},
+    Pix {},
+    Pse {},
+    LocalBankTransfer { bank_code: Option<String> },
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct SepaAndBacsBillingDetails {
+    /// The Email ID for SEPA and BACS billing
+    pub email: Email,
+    /// The billing name for SEPA and BACS billing
+    pub name: Secret<String>,
 }
 
 impl From<api_models::payments::PaymentMethodData> for PaymentMethodData {
@@ -448,10 +422,10 @@ impl From<api_models::payments::PaymentMethodData> for PaymentMethodData {
                 Self::BankRedirect(From::from(bank_redirect_data))
             }
             api_models::payments::PaymentMethodData::BankDebit(bank_debit_data) => {
-                Self::BankDebit(bank_debit_data)
+                Self::BankDebit(From::from(bank_debit_data))
             }
             api_models::payments::PaymentMethodData::BankTransfer(bank_transfer_data) => {
-                Self::BankTransfer(bank_transfer_data)
+                Self::BankTransfer(Box::new(From::from(*bank_transfer_data)))
             }
             api_models::payments::PaymentMethodData::Crypto(crypto_data) => {
                 Self::Crypto(From::from(crypto_data))
@@ -557,10 +531,8 @@ impl From<api_models::payments::WalletData> for WalletData {
             api_models::payments::WalletData::GooglePayThirdPartySdk(_) => {
                 Self::GooglePayThirdPartySdk(Box::new(GooglePayThirdPartySdkData {}))
             }
-            api_models::payments::WalletData::MbWayRedirect(mbway_redirect_data) => {
-                Self::MbWayRedirect(Box::new(MbWayRedirection {
-                    telephone_number: mbway_redirect_data.telephone_number,
-                }))
+            api_models::payments::WalletData::MbWayRedirect(..) => {
+                Self::MbWayRedirect(Box::new(MbWayRedirection {}))
             }
             api_models::payments::WalletData::MobilePayRedirect(_) => {
                 Self::MobilePayRedirect(Box::new(MobilePayRedirection {}))
@@ -633,22 +605,12 @@ impl From<api_models::payments::ApplePayWalletData> for ApplePayWalletData {
 impl From<api_models::payments::PayLaterData> for PayLaterData {
     fn from(value: api_models::payments::PayLaterData) -> Self {
         match value {
-            api_models::payments::PayLaterData::KlarnaRedirect {
-                billing_email,
-                billing_country,
-            } => Self::KlarnaRedirect {
-                billing_email,
-                billing_country,
-            },
+            api_models::payments::PayLaterData::KlarnaRedirect { .. } => Self::KlarnaRedirect {},
             api_models::payments::PayLaterData::KlarnaSdk { token } => Self::KlarnaSdk { token },
             api_models::payments::PayLaterData::AffirmRedirect {} => Self::AffirmRedirect {},
-            api_models::payments::PayLaterData::AfterpayClearpayRedirect {
-                billing_email,
-                billing_name,
-            } => Self::AfterpayClearpayRedirect {
-                billing_email,
-                billing_name,
-            },
+            api_models::payments::PayLaterData::AfterpayClearpayRedirect { .. } => {
+                Self::AfterpayClearpayRedirect {}
+            }
             api_models::payments::PayLaterData::PayBrightRedirect {} => Self::PayBrightRedirect {},
             api_models::payments::PayLaterData::WalleyRedirect {} => Self::WalleyRedirect {},
             api_models::payments::PayLaterData::AlmaRedirect {} => Self::AlmaRedirect {},
@@ -664,54 +626,34 @@ impl From<api_models::payments::BankRedirectData> for BankRedirectData {
                 card_number,
                 card_exp_month,
                 card_exp_year,
-                card_holder_name,
-                billing_details,
+                ..
             } => Self::BancontactCard {
                 card_number,
                 card_exp_month,
                 card_exp_year,
-                card_holder_name,
-                billing_details: billing_details.map(BankRedirectBilling::from),
             },
             api_models::payments::BankRedirectData::Bizum {} => Self::Bizum {},
             api_models::payments::BankRedirectData::Blik { blik_code } => Self::Blik { blik_code },
-            api_models::payments::BankRedirectData::Eps {
-                billing_details,
-                bank_name,
-                country,
-            } => Self::Eps {
-                billing_details: billing_details.map(BankRedirectBilling::from),
-                bank_name,
-                country,
-            },
-            api_models::payments::BankRedirectData::Giropay {
-                billing_details,
-                bank_account_bic,
-                bank_account_iban,
-                country,
-            } => Self::Giropay {
-                billing_details: billing_details.map(BankRedirectBilling::from),
-                bank_account_bic,
-                bank_account_iban,
-                country,
-            },
-            api_models::payments::BankRedirectData::Ideal {
-                billing_details,
-                bank_name,
-                country,
-            } => Self::Ideal {
-                billing_details: billing_details.map(BankRedirectBilling::from),
-                bank_name,
-                country,
-            },
-            api_models::payments::BankRedirectData::Interac { country, email } => {
-                Self::Interac { country, email }
+            api_models::payments::BankRedirectData::Eps { bank_name, .. } => {
+                Self::Eps { bank_name }
             }
+            api_models::payments::BankRedirectData::Giropay {
+                bank_account_bic,
+                bank_account_iban,
+                ..
+            } => Self::Giropay {
+                bank_account_bic,
+                bank_account_iban,
+            },
+            api_models::payments::BankRedirectData::Ideal { bank_name, .. } => {
+                Self::Ideal { bank_name }
+            }
+            api_models::payments::BankRedirectData::Interac { .. } => Self::Interac {},
             api_models::payments::BankRedirectData::OnlineBankingCzechRepublic { issuer } => {
                 Self::OnlineBankingCzechRepublic { issuer }
             }
-            api_models::payments::BankRedirectData::OnlineBankingFinland { email } => {
-                Self::OnlineBankingFinland { email }
+            api_models::payments::BankRedirectData::OnlineBankingFinland { .. } => {
+                Self::OnlineBankingFinland {}
             }
             api_models::payments::BankRedirectData::OnlineBankingPoland { issuer } => {
                 Self::OnlineBankingPoland { issuer }
@@ -719,46 +661,22 @@ impl From<api_models::payments::BankRedirectData> for BankRedirectData {
             api_models::payments::BankRedirectData::OnlineBankingSlovakia { issuer } => {
                 Self::OnlineBankingSlovakia { issuer }
             }
-            api_models::payments::BankRedirectData::OpenBankingUk { issuer, country } => {
-                Self::OpenBankingUk { issuer, country }
+            api_models::payments::BankRedirectData::OpenBankingUk { issuer, .. } => {
+                Self::OpenBankingUk { issuer }
             }
-            api_models::payments::BankRedirectData::Przelewy24 {
-                bank_name,
-                billing_details,
-            } => Self::Przelewy24 {
-                bank_name,
-                billing_details: BankRedirectBilling {
-                    billing_name: billing_details.billing_name,
-                    email: billing_details.email,
-                },
-            },
+            api_models::payments::BankRedirectData::Przelewy24 { bank_name, .. } => {
+                Self::Przelewy24 { bank_name }
+            }
             api_models::payments::BankRedirectData::Sofort {
-                billing_details,
-                country,
-                preferred_language,
-            } => Self::Sofort {
-                billing_details: billing_details.map(BankRedirectBilling::from),
-                country,
-                preferred_language,
-            },
-            api_models::payments::BankRedirectData::Trustly { country } => {
-                Self::Trustly { country }
-            }
+                preferred_language, ..
+            } => Self::Sofort { preferred_language },
+            api_models::payments::BankRedirectData::Trustly { .. } => Self::Trustly {},
             api_models::payments::BankRedirectData::OnlineBankingFpx { issuer } => {
                 Self::OnlineBankingFpx { issuer }
             }
             api_models::payments::BankRedirectData::OnlineBankingThailand { issuer } => {
                 Self::OnlineBankingThailand { issuer }
             }
-        }
-    }
-}
-
-impl From<api_models::payments::BankRedirectBilling> for BankRedirectBilling {
-    fn from(billing: api_models::payments::BankRedirectBilling) -> Self {
-        Self {
-            billing_name: billing.billing_name,
-            email: billing.email,
         }
     }
 }
@@ -785,32 +703,19 @@ impl From<api_models::payments::VoucherData> for VoucherData {
                     social_security_number: boleto_data.social_security_number,
                 }))
             }
-            api_models::payments::VoucherData::Alfamart(alfamart_data) => {
-                Self::Alfamart(Box::new(AlfamartVoucherData {
-                    first_name: alfamart_data.first_name,
-                    last_name: alfamart_data.last_name,
-                    email: alfamart_data.email,
-                }))
+            api_models::payments::VoucherData::Alfamart(_) => {
+                Self::Alfamart(Box::new(AlfamartVoucherData {}))
             }
-            api_models::payments::VoucherData::Indomaret(indomaret_data) => {
-                Self::Indomaret(Box::new(IndomaretVoucherData {
-                    first_name: indomaret_data.first_name,
-                    last_name: indomaret_data.last_name,
-                    email: indomaret_data.email,
-                }))
+            api_models::payments::VoucherData::Indomaret(_) => {
+                Self::Indomaret(Box::new(IndomaretVoucherData {}))
             }
-            api_models::payments::VoucherData::SevenEleven(jcs_data)
-            | api_models::payments::VoucherData::Lawson(jcs_data)
-            | api_models::payments::VoucherData::MiniStop(jcs_data)
-            | api_models::payments::VoucherData::FamilyMart(jcs_data)
-            | api_models::payments::VoucherData::Seicomart(jcs_data)
-            | api_models::payments::VoucherData::PayEasy(jcs_data) => {
-                Self::SevenEleven(Box::new(JCSVoucherData {
-                    first_name: jcs_data.first_name,
-                    last_name: jcs_data.last_name,
-                    email: jcs_data.email,
-                    phone_number: jcs_data.phone_number,
-                }))
+            api_models::payments::VoucherData::SevenEleven(_)
+            | api_models::payments::VoucherData::Lawson(_)
+            | api_models::payments::VoucherData::MiniStop(_)
+            | api_models::payments::VoucherData::FamilyMart(_)
+            | api_models::payments::VoucherData::Seicomart(_)
+            | api_models::payments::VoucherData::PayEasy(_) => {
+                Self::SevenEleven(Box::new(JCSVoucherData {}))
             }
             api_models::payments::VoucherData::Efecty => Self::Efecty,
             api_models::payments::VoucherData::PagoEfectivo => Self::PagoEfectivo,
@@ -842,6 +747,91 @@ impl From<api_models::payments::CardToken> for CardToken {
         Self {
             card_holder_name,
             card_cvc,
+        }
+    }
+}
+
+impl From<api_models::payments::BankDebitData> for BankDebitData {
+    fn from(value: api_models::payments::BankDebitData) -> Self {
+        match value {
+            api_models::payments::BankDebitData::AchBankDebit {
+                account_number,
+                routing_number,
+                bank_name,
+                bank_type,
+                bank_holder_type,
+                ..
+            } => Self::AchBankDebit {
+                account_number,
+                routing_number,
+                bank_name,
+                bank_type,
+                bank_holder_type,
+            },
+            api_models::payments::BankDebitData::SepaBankDebit { iban, .. } => {
+                Self::SepaBankDebit { iban }
+            }
+            api_models::payments::BankDebitData::BecsBankDebit {
+                account_number,
+                bsb_number,
+                ..
+            } => Self::BecsBankDebit {
+                account_number,
+                bsb_number,
+            },
+            api_models::payments::BankDebitData::BacsBankDebit {
+                account_number,
+                sort_code,
+                ..
+            } => Self::BacsBankDebit {
+                account_number,
+                sort_code,
+            },
+        }
+    }
+}
+
+impl From<api_models::payments::BankTransferData> for BankTransferData {
+    fn from(value: api_models::payments::BankTransferData) -> Self {
+        match value {
+            api_models::payments::BankTransferData::AchBankTransfer { .. } => {
+                Self::AchBankTransfer {}
+            }
+            api_models::payments::BankTransferData::SepaBankTransfer { .. } => {
+                Self::SepaBankTransfer {}
+            }
+            api_models::payments::BankTransferData::BacsBankTransfer { .. } => {
+                Self::BacsBankTransfer {}
+            }
+            api_models::payments::BankTransferData::MultibancoBankTransfer { .. } => {
+                Self::MultibancoBankTransfer {}
+            }
+            api_models::payments::BankTransferData::PermataBankTransfer { .. } => {
+                Self::PermataBankTransfer {}
+            }
+            api_models::payments::BankTransferData::BcaBankTransfer { .. } => {
+                Self::BcaBankTransfer {}
+            }
+            api_models::payments::BankTransferData::BniVaBankTransfer { .. } => {
+                Self::BniVaBankTransfer {}
+            }
+            api_models::payments::BankTransferData::BriVaBankTransfer { .. } => {
+                Self::BriVaBankTransfer {}
+            }
+            api_models::payments::BankTransferData::CimbVaBankTransfer { .. } => {
+                Self::CimbVaBankTransfer {}
+            }
+            api_models::payments::BankTransferData::DanamonVaBankTransfer { .. } => {
+                Self::DanamonVaBankTransfer {}
+            }
+            api_models::payments::BankTransferData::MandiriVaBankTransfer { .. } => {
+                Self::MandiriVaBankTransfer {}
+            }
+            api_models::payments::BankTransferData::Pix {} => Self::Pix {},
+            api_models::payments::BankTransferData::Pse {} => Self::Pse {},
+            api_models::payments::BankTransferData::LocalBankTransfer { bank_code } => {
+                Self::LocalBankTransfer { bank_code }
+            }
         }
     }
 }

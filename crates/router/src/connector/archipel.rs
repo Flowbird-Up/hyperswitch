@@ -1,27 +1,25 @@
-pub mod transformers;
-
 use std::fmt::Debug;
-use error_stack::{ResultExt, IntoReport};
+
+use error_stack::{IntoReport, ResultExt};
+
 use masking::ExposeInterface;
+use transformers as archipel;
 
 use crate::{
-    events::connector_api_logs::ConnectorEvent,
     configs::settings,
-    utils::{self, BytesExt},
-    core::{
-        errors::{self, CustomResult},
-    },
-    headers, services::{self, ConnectorIntegration, ConnectorValidation, request::{self, Mask}},
-    types::{
+    core::errors::{self, CustomResult},
+    events::connector_api_logs::ConnectorEvent,
+    headers,
+    services::{self, ConnectorIntegration, ConnectorValidation, request::{self, Mask}}, types::{
         self,
         api::{self, ConnectorCommon, ConnectorCommonExt},
-        ErrorResponse, Response,
-        RequestContent
-    }
+        ErrorResponse, RequestContent,
+        Response
+    },
+    utils::{self, BytesExt}
 };
 
-
-use transformers as archipel;
+pub mod transformers;
 
 #[derive(Debug, Clone)]
 pub struct Archipel;
@@ -38,6 +36,8 @@ impl api::Refund for Archipel {}
 impl api::RefundExecute for Archipel {}
 impl api::RefundSync for Archipel {}
 impl api::PaymentToken for Archipel {}
+impl api::PayoutRecipientAccount for Archipel {}
+
 
 impl
 ConnectorIntegration<
@@ -489,6 +489,14 @@ ConnectorIntegration<api::RSync, types::RefundsData, types::RefundsResponseData>
     fn get_error_response(&self, res: Response, event_builder: Option<&mut ConnectorEvent>) -> CustomResult<ErrorResponse,errors::ConnectorError> {
         self.build_error_response(res, event_builder)
     }
+}
+
+impl ConnectorIntegration<
+    api::PoRecipientAccount,
+    types::PayoutsData,
+    types::PayoutsResponseData> for Archipel
+{
+    //TODO: implement PayoutRecipientAccount flow
 }
 
 #[async_trait::async_trait]

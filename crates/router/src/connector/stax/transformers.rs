@@ -18,22 +18,10 @@ pub struct StaxRouterData<T> {
     pub router_data: T,
 }
 
-impl<T>
-    TryFrom<(
-        &types::api::CurrencyUnit,
-        types::storage::enums::Currency,
-        i64,
-        T,
-    )> for StaxRouterData<T>
-{
+impl<T> TryFrom<(&api::CurrencyUnit, enums::Currency, i64, T)> for StaxRouterData<T> {
     type Error = error_stack::Report<errors::ConnectorError>;
     fn try_from(
-        (currency_unit, currency, amount, item): (
-            &types::api::CurrencyUnit,
-            types::storage::enums::Currency,
-            i64,
-            T,
-        ),
+        (currency_unit, currency, amount, item): (&api::CurrencyUnit, enums::Currency, i64, T),
     ) -> Result<Self, Self::Error> {
         let amount = utils::get_amount_as_f64(currency_unit, amount, currency)?;
         Ok(Self {
@@ -79,18 +67,18 @@ impl TryFrom<&StaxRouterData<&types::PaymentsAuthorizeRouterData>> for StaxPayme
                     total,
                     is_refundable: true,
                     pre_auth,
-                    payment_method_id: Secret::new(match pm_token {
+                    payment_method_id: match pm_token {
                         types::PaymentMethodToken::Token(token) => token,
                         types::PaymentMethodToken::ApplePayDecrypt(_) => Err(
                             unimplemented_payment_method!("Apple Pay", "Simplified", "Stax"),
                         )?,
-                    }),
+                    },
                     idempotency_id: Some(item.router_data.connector_request_reference_id.clone()),
                 })
             }
-            domain::PaymentMethodData::BankDebit(
-                api_models::payments::BankDebitData::AchBankDebit { .. },
-            ) => {
+            domain::PaymentMethodData::BankDebit(domain::BankDebitData::AchBankDebit {
+                ..
+            }) => {
                 let pm_token = item.router_data.get_payment_method_token()?;
                 let pre_auth = !item.router_data.request.is_auto_capture()?;
                 Ok(Self {
@@ -98,12 +86,12 @@ impl TryFrom<&StaxRouterData<&types::PaymentsAuthorizeRouterData>> for StaxPayme
                     total,
                     is_refundable: true,
                     pre_auth,
-                    payment_method_id: Secret::new(match pm_token {
+                    payment_method_id: match pm_token {
                         types::PaymentMethodToken::Token(token) => token,
                         types::PaymentMethodToken::ApplePayDecrypt(_) => Err(
                             unimplemented_payment_method!("Apple Pay", "Simplified", "Stax"),
                         )?,
-                    }),
+                    },
                     idempotency_id: Some(item.router_data.connector_request_reference_id.clone()),
                 })
             }
@@ -206,9 +194,9 @@ pub struct StaxBankTokenizeData {
     person_name: Secret<String>,
     bank_account: Secret<String>,
     bank_routing: Secret<String>,
-    bank_name: api_models::enums::BankNames,
-    bank_type: api_models::enums::BankType,
-    bank_holder_type: api_models::enums::BankHolderType,
+    bank_name: common_enums::BankNames,
+    bank_type: common_enums::BankType,
+    bank_holder_type: common_enums::BankHolderType,
     customer_id: Secret<String>,
 }
 
@@ -238,19 +226,16 @@ impl TryFrom<&types::TokenizationRouterData> for StaxTokenRequest {
                 };
                 Ok(Self::Card(stax_card_data))
             }
-            domain::PaymentMethodData::BankDebit(
-                api_models::payments::BankDebitData::AchBankDebit {
-                    billing_details,
-                    account_number,
-                    routing_number,
-                    bank_name,
-                    bank_type,
-                    bank_holder_type,
-                    ..
-                },
-            ) => {
+            domain::PaymentMethodData::BankDebit(domain::BankDebitData::AchBankDebit {
+                account_number,
+                routing_number,
+                bank_name,
+                bank_type,
+                bank_holder_type,
+                ..
+            }) => {
                 let stax_bank_data = StaxBankTokenizeData {
-                    person_name: billing_details.name,
+                    person_name: item.get_billing_full_name()?,
                     bank_account: account_number,
                     bank_routing: routing_number,
                     bank_name: bank_name.ok_or_else(missing_field_err("bank_name"))?,

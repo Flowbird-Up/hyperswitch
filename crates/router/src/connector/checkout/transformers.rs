@@ -23,22 +23,10 @@ pub struct CheckoutRouterData<T> {
     pub router_data: T,
 }
 
-impl<T>
-    TryFrom<(
-        &types::api::CurrencyUnit,
-        types::storage::enums::Currency,
-        i64,
-        T,
-    )> for CheckoutRouterData<T>
-{
+impl<T> TryFrom<(&api::CurrencyUnit, enums::Currency, i64, T)> for CheckoutRouterData<T> {
     type Error = error_stack::Report<errors::ConnectorError>;
     fn try_from(
-        (_currency_unit, _currency, amount, item): (
-            &types::api::CurrencyUnit,
-            types::storage::enums::Currency,
-            i64,
-            T,
-        ),
+        (_currency_unit, _currency, amount, item): (&api::CurrencyUnit, enums::Currency, i64, T),
     ) -> Result<Self, Self::Error> {
         Ok(Self {
             amount,
@@ -306,7 +294,7 @@ impl TryFrom<&CheckoutRouterData<&types::PaymentsAuthorizeRouterData>> for Payme
                 domain::WalletData::GooglePay(_) => Ok(PaymentSource::Wallets(WalletSource {
                     source_type: CheckoutSourceTypes::Token,
                     token: match item.router_data.get_payment_method_token()? {
-                        types::PaymentMethodToken::Token(token) => token.into(),
+                        types::PaymentMethodToken::Token(token) => token,
                         types::PaymentMethodToken::ApplePayDecrypt(_) => Err(
                             unimplemented_payment_method!("Apple Pay", "Simplified", "Checkout"),
                         )?,
@@ -318,7 +306,7 @@ impl TryFrom<&CheckoutRouterData<&types::PaymentsAuthorizeRouterData>> for Payme
                         types::PaymentMethodToken::Token(apple_pay_payment_token) => {
                             Ok(PaymentSource::Wallets(WalletSource {
                                 source_type: CheckoutSourceTypes::Token,
-                                token: apple_pay_payment_token.into(),
+                                token: apple_pay_payment_token,
                             }))
                         }
                         types::PaymentMethodToken::ApplePayDecrypt(decrypt_data) => {
@@ -1237,7 +1225,7 @@ pub struct CheckoutWebhookBody {
     pub links: Links,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct CheckoutDisputeWebhookData {
     pub id: String,
     pub payment_id: Option<String>,
@@ -1382,7 +1370,7 @@ impl TryFrom<&api::IncomingWebhookRequestDetails<'_>> for PaymentsResponse {
         let details: CheckoutWebhookBody = request
             .body
             .parse_struct("CheckoutWebhookBody")
-            .change_context(errors::ConnectorError::WebhookReferenceIdNotFound)?;
+            .change_context(errors::ConnectorError::WebhookBodyDecodingFailed)?;
         let data = details.data;
         let psync_struct = Self {
             id: data.payment_id.unwrap_or(data.id),
@@ -1400,6 +1388,28 @@ impl TryFrom<&api::IncomingWebhookRequestDetails<'_>> for PaymentsResponse {
         };
 
         Ok(psync_struct)
+    }
+}
+
+impl TryFrom<&api::IncomingWebhookRequestDetails<'_>> for RefundResponse {
+    type Error = error_stack::Report<errors::ConnectorError>;
+
+    fn try_from(request: &api::IncomingWebhookRequestDetails<'_>) -> Result<Self, Self::Error> {
+        let details: CheckoutWebhookBody = request
+            .body
+            .parse_struct("CheckoutWebhookBody")
+            .change_context(errors::ConnectorError::WebhookBodyDecodingFailed)?;
+        let data = details.data;
+        let refund_struct = Self {
+            action_id: data
+                .action_id
+                .ok_or(errors::ConnectorError::WebhookBodyDecodingFailed)?,
+            reference: data
+                .reference
+                .ok_or(errors::ConnectorError::WebhookBodyDecodingFailed)?,
+        };
+
+        Ok(refund_struct)
     }
 }
 

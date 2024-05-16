@@ -28,12 +28,12 @@ where
 
     async fn update_address_for_payments(
         &self,
-        this: domain::Address,
+        this: domain::PaymentAddress,
         address: domain::AddressUpdate,
         payment_id: String,
         key_store: &domain::MerchantKeyStore,
         storage_scheme: MerchantStorageScheme,
-    ) -> CustomResult<domain::Address, errors::StorageError>;
+    ) -> CustomResult<domain::PaymentAddress, errors::StorageError>;
 
     async fn find_address_by_address_id(
         &self,
@@ -44,14 +44,14 @@ where
     async fn insert_address_for_payments(
         &self,
         payment_id: &str,
-        address: domain::Address,
+        address: domain::PaymentAddress,
         key_store: &domain::MerchantKeyStore,
         storage_scheme: MerchantStorageScheme,
-    ) -> CustomResult<domain::Address, errors::StorageError>;
+    ) -> CustomResult<domain::PaymentAddress, errors::StorageError>;
 
     async fn insert_address_for_customers(
         &self,
-        address: domain::Address,
+        address: domain::CustomerAddress,
         key_store: &domain::MerchantKeyStore,
     ) -> CustomResult<domain::Address, errors::StorageError>;
 
@@ -62,7 +62,7 @@ where
         address_id: &str,
         key_store: &domain::MerchantKeyStore,
         storage_scheme: MerchantStorageScheme,
-    ) -> CustomResult<domain::Address, errors::StorageError>;
+    ) -> CustomResult<domain::PaymentAddress, errors::StorageError>;
 
     async fn update_address_by_merchant_id_customer_id(
         &self,
@@ -121,7 +121,7 @@ mod storage {
             address_id: &str,
             key_store: &domain::MerchantKeyStore,
             _storage_scheme: MerchantStorageScheme,
-        ) -> CustomResult<domain::Address, errors::StorageError> {
+        ) -> CustomResult<domain::PaymentAddress, errors::StorageError> {
             let conn = connection::pg_connection_read(self).await?;
             storage_types::Address::find_by_merchant_id_payment_id_address_id(
                 &conn,
@@ -163,12 +163,12 @@ mod storage {
         #[instrument(skip_all)]
         async fn update_address_for_payments(
             &self,
-            this: domain::Address,
+            this: domain::PaymentAddress,
             address_update: domain::AddressUpdate,
             _payment_id: String,
             key_store: &domain::MerchantKeyStore,
             _storage_scheme: MerchantStorageScheme,
-        ) -> CustomResult<domain::Address, errors::StorageError> {
+        ) -> CustomResult<domain::PaymentAddress, errors::StorageError> {
             let conn = connection::pg_connection_write(self).await?;
             let address = Conversion::convert(this)
                 .await
@@ -190,10 +190,10 @@ mod storage {
         async fn insert_address_for_payments(
             &self,
             _payment_id: &str,
-            address: domain::Address,
+            address: domain::PaymentAddress,
             key_store: &domain::MerchantKeyStore,
             _storage_scheme: MerchantStorageScheme,
-        ) -> CustomResult<domain::Address, errors::StorageError> {
+        ) -> CustomResult<domain::PaymentAddress, errors::StorageError> {
             let conn = connection::pg_connection_write(self).await?;
             address
                 .construct_new()
@@ -214,7 +214,7 @@ mod storage {
         #[instrument(skip_all)]
         async fn insert_address_for_customers(
             &self,
-            address: domain::Address,
+            address: domain::CustomerAddress,
             key_store: &domain::MerchantKeyStore,
         ) -> CustomResult<domain::Address, errors::StorageError> {
             let conn = connection::pg_connection_write(self).await?;
@@ -275,7 +275,7 @@ mod storage {
     use error_stack::{report, ResultExt};
     use redis_interface::HsetnxReply;
     use router_env::{instrument, tracing};
-    use storage_impl::redis::kv_store::{kv_wrapper, KvOperation};
+    use storage_impl::redis::kv_store::{kv_wrapper, KvOperation, PartitionKey};
 
     use super::AddressInterface;
     use crate::{
@@ -320,7 +320,7 @@ mod storage {
             address_id: &str,
             key_store: &domain::MerchantKeyStore,
             storage_scheme: MerchantStorageScheme,
-        ) -> CustomResult<domain::Address, errors::StorageError> {
+        ) -> CustomResult<domain::PaymentAddress, errors::StorageError> {
             let conn = connection::pg_connection_read(self).await?;
             let database_call = || async {
                 storage_types::Address::find_by_merchant_id_payment_id_address_id(
@@ -335,7 +335,10 @@ mod storage {
             let address = match storage_scheme {
                 MerchantStorageScheme::PostgresOnly => database_call().await,
                 MerchantStorageScheme::RedisKv => {
-                    let key = format!("mid_{}_pid_{}", merchant_id, payment_id);
+                    let key = PartitionKey::MerchantIdPaymentId {
+                        merchant_id,
+                        payment_id,
+                    };
                     let field = format!("add_{}", address_id);
                     Box::pin(db_utils::try_redis_get_else_try_database_get(
                         async {
@@ -381,12 +384,12 @@ mod storage {
         #[instrument(skip_all)]
         async fn update_address_for_payments(
             &self,
-            this: domain::Address,
+            this: domain::PaymentAddress,
             address_update: domain::AddressUpdate,
             payment_id: String,
             key_store: &domain::MerchantKeyStore,
             storage_scheme: MerchantStorageScheme,
-        ) -> CustomResult<domain::Address, errors::StorageError> {
+        ) -> CustomResult<domain::PaymentAddress, errors::StorageError> {
             let conn = connection::pg_connection_write(self).await?;
             let address = Conversion::convert(this)
                 .await
@@ -406,7 +409,11 @@ mod storage {
                         .await
                 }
                 MerchantStorageScheme::RedisKv => {
-                    let key = format!("mid_{}_pid_{}", address.merchant_id.clone(), payment_id);
+                    let merchant_id = address.merchant_id.clone();
+                    let key = PartitionKey::MerchantIdPaymentId {
+                        merchant_id: &merchant_id,
+                        payment_id: &payment_id,
+                    };
                     let field = format!("add_{}", address.address_id);
                     let updated_address = AddressUpdateInternal::from(address_update.clone())
                         .create_address(address.clone());
@@ -430,7 +437,7 @@ mod storage {
                             (&field, redis_value),
                             redis_entry,
                         ),
-                        &key,
+                        key,
                     )
                     .await
                     .change_context(errors::StorageError::KVError)?
@@ -449,10 +456,10 @@ mod storage {
         async fn insert_address_for_payments(
             &self,
             payment_id: &str,
-            address: domain::Address,
+            address: domain::PaymentAddress,
             key_store: &domain::MerchantKeyStore,
             storage_scheme: MerchantStorageScheme,
-        ) -> CustomResult<domain::Address, errors::StorageError> {
+        ) -> CustomResult<domain::PaymentAddress, errors::StorageError> {
             let address_new = address
                 .clone()
                 .construct_new()
@@ -475,7 +482,10 @@ mod storage {
                         .await
                 }
                 MerchantStorageScheme::RedisKv => {
-                    let key = format!("mid_{}_pid_{}", merchant_id, payment_id);
+                    let key = PartitionKey::MerchantIdPaymentId {
+                        merchant_id: &merchant_id,
+                        payment_id,
+                    };
                     let field = format!("add_{}", &address_new.address_id);
                     let created_address = diesel_models::Address {
                         id: Some(0i32),
@@ -513,7 +523,7 @@ mod storage {
                             &created_address,
                             redis_entry,
                         ),
-                        &key,
+                        key,
                     )
                     .await
                     .change_context(errors::StorageError::KVError)?
@@ -537,7 +547,7 @@ mod storage {
         #[instrument(skip_all)]
         async fn insert_address_for_customers(
             &self,
-            address: domain::Address,
+            address: domain::CustomerAddress,
             key_store: &domain::MerchantKeyStore,
         ) -> CustomResult<domain::Address, errors::StorageError> {
             let conn = connection::pg_connection_write(self).await?;
@@ -625,7 +635,7 @@ impl AddressInterface for MockDb {
         address_id: &str,
         key_store: &domain::MerchantKeyStore,
         _storage_scheme: MerchantStorageScheme,
-    ) -> CustomResult<domain::Address, errors::StorageError> {
+    ) -> CustomResult<domain::PaymentAddress, errors::StorageError> {
         match self
             .addresses
             .lock()
@@ -678,18 +688,18 @@ impl AddressInterface for MockDb {
 
     async fn update_address_for_payments(
         &self,
-        this: domain::Address,
+        this: domain::PaymentAddress,
         address_update: domain::AddressUpdate,
         _payment_id: String,
         key_store: &domain::MerchantKeyStore,
         _storage_scheme: MerchantStorageScheme,
-    ) -> CustomResult<domain::Address, errors::StorageError> {
+    ) -> CustomResult<domain::PaymentAddress, errors::StorageError> {
         let updated_addr = self
             .addresses
             .lock()
             .await
             .iter_mut()
-            .find(|address| address.address_id == this.address_id)
+            .find(|address| address.address_id == this.address.address_id)
             .map(|a| {
                 let address_updated =
                     AddressUpdateInternal::from(address_update).create_address(a.clone());
@@ -711,10 +721,10 @@ impl AddressInterface for MockDb {
     async fn insert_address_for_payments(
         &self,
         _payment_id: &str,
-        address_new: domain::Address,
+        address_new: domain::PaymentAddress,
         key_store: &domain::MerchantKeyStore,
         _storage_scheme: MerchantStorageScheme,
-    ) -> CustomResult<domain::Address, errors::StorageError> {
+    ) -> CustomResult<domain::PaymentAddress, errors::StorageError> {
         let mut addresses = self.addresses.lock().await;
 
         let address = Conversion::convert(address_new)
@@ -731,7 +741,7 @@ impl AddressInterface for MockDb {
 
     async fn insert_address_for_customers(
         &self,
-        address_new: domain::Address,
+        address_new: domain::CustomerAddress,
         key_store: &domain::MerchantKeyStore,
     ) -> CustomResult<domain::Address, errors::StorageError> {
         let mut addresses = self.addresses.lock().await;

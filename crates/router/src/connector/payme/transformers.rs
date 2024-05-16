@@ -17,7 +17,10 @@ use crate::{
     consts,
     core::errors,
     services,
-    types::{self, api, domain, domain::PaymentMethodData, storage::enums, MandateReference},
+    types::{
+        self, api, domain, domain::PaymentMethodData, storage::enums, transformers::ForeignFrom,
+        MandateReference,
+    },
     unimplemented_payment_method,
 };
 
@@ -29,22 +32,10 @@ pub struct PaymeRouterData<T> {
     pub router_data: T,
 }
 
-impl<T>
-    TryFrom<(
-        &types::api::CurrencyUnit,
-        types::storage::enums::Currency,
-        i64,
-        T,
-    )> for PaymeRouterData<T>
-{
+impl<T> TryFrom<(&api::CurrencyUnit, enums::Currency, i64, T)> for PaymeRouterData<T> {
     type Error = error_stack::Report<errors::ConnectorError>;
     fn try_from(
-        (_currency_unit, _currency, amount, item): (
-            &types::api::CurrencyUnit,
-            types::storage::enums::Currency,
-            i64,
-            T,
-        ),
+        (_currency_unit, _currency, amount, item): (&api::CurrencyUnit, enums::Currency, i64, T),
     ) -> Result<Self, Self::Error> {
         Ok(Self {
             amount,
@@ -80,7 +71,7 @@ pub struct MandateRequest {
 pub struct Pay3dsRequest {
     buyer_name: Secret<String>,
     buyer_email: pii::Email,
-    buyer_key: String,
+    buyer_key: Secret<String>,
     payme_sale_id: String,
     meta_data_jwt: Secret<String>,
 }
@@ -200,7 +191,10 @@ impl<F, T>
         let status = enums::AttemptStatus::from(item.response.sale_status.clone());
         let response = if is_payment_failure(status) {
             // To populate error message in case of failure
-            Err(types::ErrorResponse::from((&item.response, item.http_code)))
+            Err(types::ErrorResponse::foreign_from((
+                &item.response,
+                item.http_code,
+            )))
         } else {
             Ok(types::PaymentsResponseData::try_from(&item.response)?)
         };
@@ -212,8 +206,8 @@ impl<F, T>
     }
 }
 
-impl From<(&PaymePaySaleResponse, u16)> for types::ErrorResponse {
-    fn from((pay_sale_response, http_code): (&PaymePaySaleResponse, u16)) -> Self {
+impl ForeignFrom<(&PaymePaySaleResponse, u16)> for types::ErrorResponse {
+    fn foreign_from((pay_sale_response, http_code): (&PaymePaySaleResponse, u16)) -> Self {
         let code = pay_sale_response
             .status_error_code
             .map(|error_code| error_code.to_string())
@@ -278,7 +272,7 @@ impl<F, T> TryFrom<types::ResponseRouterData<F, SaleQueryResponse, T, types::Pay
         let status = enums::AttemptStatus::from(transaction_response.sale_status.clone());
         let response = if is_payment_failure(status) {
             // To populate error message in case of failure
-            Err(types::ErrorResponse::from((
+            Err(types::ErrorResponse::foreign_from((
                 &transaction_response,
                 item.http_code,
             )))
@@ -293,8 +287,8 @@ impl<F, T> TryFrom<types::ResponseRouterData<F, SaleQueryResponse, T, types::Pay
     }
 }
 
-impl From<(&SaleQuery, u16)> for types::ErrorResponse {
-    fn from((sale_query_response, http_code): (&SaleQuery, u16)) -> Self {
+impl ForeignFrom<(&SaleQuery, u16)> for types::ErrorResponse {
+    fn foreign_from((sale_query_response, http_code): (&SaleQuery, u16)) -> Self {
         Self {
             code: sale_query_response
                 .sale_error_code
@@ -538,11 +532,6 @@ impl<F>
             }
             _ => {
                 let currency_code = item.data.request.get_currency()?;
-                let country_code = item
-                    .data
-                    .get_optional_billing()
-                    .and_then(|billing| billing.address.as_ref())
-                    .and_then(|address| address.country);
                 let amount = item.data.request.get_amount()?;
                 let amount_in_base_unit = utils::to_currency_base_unit(amount, currency_code)?;
                 let pmd = item.data.request.payment_method_data.to_owned();
@@ -557,7 +546,7 @@ impl<F>
                                 api_models::payments::ApplePaySessionResponse::NoSessionResponse,
                             payment_request_data: Some(
                                 api_models::payments::ApplePayPaymentRequest {
-                                    country_code,
+                                    country_code: item.data.get_billing_country()?,
                                     currency_code,
                                     total: api_models::payments::AmountInfo {
                                         label: "Apple Pay".to_string(),
@@ -567,6 +556,8 @@ impl<F>
                                     merchant_capabilities: None,
                                     supported_networks: None,
                                     merchant_identifier: None,
+                                    required_billing_contact_fields: None,
+                                    required_shipping_contact_fields: None,
                                 },
                             ),
                             connector: "payme".to_string(),
@@ -635,7 +626,7 @@ impl TryFrom<&types::PaymentsAuthorizeRouterData> for PayRequest {
     type Error = error_stack::Report<errors::ConnectorError>;
     fn try_from(item: &types::PaymentsAuthorizeRouterData) -> Result<Self, Self::Error> {
         match item.request.payment_method_data.clone() {
-            domain::PaymentMethodData::Card(req_card) => {
+            PaymentMethodData::Card(req_card) => {
                 let card = PaymeCard {
                     credit_card_cvv: req_card.card_cvc.clone(),
                     credit_card_exp: req_card
@@ -657,23 +648,21 @@ impl TryFrom<&types::PaymentsAuthorizeRouterData> for PayRequest {
                     language: LANGUAGE.to_string(),
                 })
             }
-            domain::PaymentMethodData::CardRedirect(_)
-            | domain::PaymentMethodData::Wallet(_)
-            | domain::PaymentMethodData::PayLater(_)
-            | domain::PaymentMethodData::BankRedirect(_)
-            | domain::PaymentMethodData::BankDebit(_)
-            | domain::PaymentMethodData::BankTransfer(_)
-            | domain::PaymentMethodData::Crypto(_)
-            | domain::PaymentMethodData::MandatePayment
-            | domain::PaymentMethodData::Reward
-            | domain::PaymentMethodData::Upi(_)
-            | domain::PaymentMethodData::Voucher(_)
-            | domain::PaymentMethodData::GiftCard(_)
-            | domain::PaymentMethodData::CardToken(_) => {
-                Err(errors::ConnectorError::NotImplemented(
-                    utils::get_unimplemented_payment_method_error_message("payme"),
-                ))?
-            }
+            PaymentMethodData::CardRedirect(_)
+            | PaymentMethodData::Wallet(_)
+            | PaymentMethodData::PayLater(_)
+            | PaymentMethodData::BankRedirect(_)
+            | PaymentMethodData::BankDebit(_)
+            | PaymentMethodData::BankTransfer(_)
+            | PaymentMethodData::Crypto(_)
+            | PaymentMethodData::MandatePayment
+            | PaymentMethodData::Reward
+            | PaymentMethodData::Upi(_)
+            | PaymentMethodData::Voucher(_)
+            | PaymentMethodData::GiftCard(_)
+            | PaymentMethodData::CardToken(_) => Err(errors::ConnectorError::NotImplemented(
+                utils::get_unimplemented_payment_method_error_message("payme"),
+            ))?,
         }
     }
 }
@@ -686,7 +675,7 @@ impl TryFrom<&types::PaymentsCompleteAuthorizeRouterData> for Pay3dsRequest {
     type Error = error_stack::Report<errors::ConnectorError>;
     fn try_from(item: &types::PaymentsCompleteAuthorizeRouterData) -> Result<Self, Self::Error> {
         match item.request.payment_method_data.clone() {
-            Some(domain::PaymentMethodData::Card(_)) => {
+            Some(PaymentMethodData::Card(_)) => {
                 let buyer_email = item.request.get_email()?;
                 let buyer_name = item.get_billing_address()?.get_full_name()?;
 
@@ -717,19 +706,19 @@ impl TryFrom<&types::PaymentsCompleteAuthorizeRouterData> for Pay3dsRequest {
                     meta_data_jwt: Secret::new(jwt_data.meta_data),
                 })
             }
-            Some(domain::PaymentMethodData::CardRedirect(_))
-            | Some(domain::PaymentMethodData::Wallet(_))
-            | Some(domain::PaymentMethodData::PayLater(_))
-            | Some(domain::PaymentMethodData::BankRedirect(_))
-            | Some(domain::PaymentMethodData::BankDebit(_))
-            | Some(domain::PaymentMethodData::BankTransfer(_))
-            | Some(domain::PaymentMethodData::Crypto(_))
-            | Some(domain::PaymentMethodData::MandatePayment)
-            | Some(domain::PaymentMethodData::Reward)
-            | Some(domain::PaymentMethodData::Upi(_))
-            | Some(domain::PaymentMethodData::Voucher(_))
-            | Some(domain::PaymentMethodData::GiftCard(_))
-            | Some(domain::PaymentMethodData::CardToken(_))
+            Some(PaymentMethodData::CardRedirect(_))
+            | Some(PaymentMethodData::Wallet(_))
+            | Some(PaymentMethodData::PayLater(_))
+            | Some(PaymentMethodData::BankRedirect(_))
+            | Some(PaymentMethodData::BankDebit(_))
+            | Some(PaymentMethodData::BankTransfer(_))
+            | Some(PaymentMethodData::Crypto(_))
+            | Some(PaymentMethodData::MandatePayment)
+            | Some(PaymentMethodData::Reward)
+            | Some(PaymentMethodData::Upi(_))
+            | Some(PaymentMethodData::Voucher(_))
+            | Some(PaymentMethodData::GiftCard(_))
+            | Some(PaymentMethodData::CardToken(_))
             | None => {
                 Err(errors::ConnectorError::NotImplemented("Tokenize Flow".to_string()).into())
             }
@@ -741,7 +730,7 @@ impl TryFrom<&types::TokenizationRouterData> for CaptureBuyerRequest {
     type Error = error_stack::Report<errors::ConnectorError>;
     fn try_from(item: &types::TokenizationRouterData) -> Result<Self, Self::Error> {
         match item.request.payment_method_data.clone() {
-            domain::PaymentMethodData::Card(req_card) => {
+            PaymentMethodData::Card(req_card) => {
                 let seller_payme_id =
                     PaymeAuthType::try_from(&item.connector_auth_type)?.seller_payme_id;
                 let card = PaymeCard {
@@ -755,19 +744,19 @@ impl TryFrom<&types::TokenizationRouterData> for CaptureBuyerRequest {
                     seller_payme_id,
                 })
             }
-            domain::PaymentMethodData::Wallet(_)
-            | domain::PaymentMethodData::CardRedirect(_)
-            | domain::PaymentMethodData::PayLater(_)
-            | domain::PaymentMethodData::BankRedirect(_)
-            | domain::PaymentMethodData::BankDebit(_)
-            | domain::PaymentMethodData::BankTransfer(_)
-            | domain::PaymentMethodData::Crypto(_)
-            | domain::PaymentMethodData::MandatePayment
-            | domain::PaymentMethodData::Reward
-            | domain::PaymentMethodData::Upi(_)
-            | domain::PaymentMethodData::Voucher(_)
-            | domain::PaymentMethodData::GiftCard(_)
-            | domain::PaymentMethodData::CardToken(_) => {
+            PaymentMethodData::Wallet(_)
+            | PaymentMethodData::CardRedirect(_)
+            | PaymentMethodData::PayLater(_)
+            | PaymentMethodData::BankRedirect(_)
+            | PaymentMethodData::BankDebit(_)
+            | PaymentMethodData::BankTransfer(_)
+            | PaymentMethodData::Crypto(_)
+            | PaymentMethodData::MandatePayment
+            | PaymentMethodData::Reward
+            | PaymentMethodData::Upi(_)
+            | PaymentMethodData::Voucher(_)
+            | PaymentMethodData::GiftCard(_)
+            | PaymentMethodData::CardToken(_) => {
                 Err(errors::ConnectorError::NotImplemented("Tokenize Flow".to_string()).into())
             }
         }
@@ -897,7 +886,7 @@ impl<F, T>
     ) -> Result<Self, Self::Error> {
         Ok(Self {
             payment_method_token: Some(types::PaymentMethodToken::Token(
-                item.response.buyer_key.clone().expose(),
+                item.response.buyer_key.clone(),
             )),
             response: Ok(types::PaymentsResponseData::TokenizationResponse {
                 token: item.response.buyer_key.expose(),
@@ -1156,14 +1145,14 @@ impl<F, T>
 
 fn get_services(item: &types::PaymentsPreProcessingRouterData) -> Option<ThreeDs> {
     match item.auth_type {
-        api_models::enums::AuthenticationType::ThreeDs => {
+        AuthenticationType::ThreeDs => {
             let settings = ThreeDsSettings { active: true };
             Some(ThreeDs {
                 name: ThreeDsType::ThreeDs,
                 settings,
             })
         }
-        api_models::enums::AuthenticationType::NoThreeDs => None,
+        AuthenticationType::NoThreeDs => None,
     }
 }
 

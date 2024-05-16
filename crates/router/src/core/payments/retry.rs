@@ -11,7 +11,6 @@ use router_env::{
 use crate::{
     core::{
         errors::{self, RouterResult, StorageErrorExt},
-        payment_methods::PaymentMethodRetrieve,
         payments::{
             self,
             flows::{ConstructFlowSpecificData, Feature},
@@ -19,38 +18,42 @@ use crate::{
         },
     },
     db::StorageInterface,
-    routes,
-    routes::{app, metrics},
-    services, types,
-    types::{api, domain, storage},
+    routes::{
+        self,
+        app::{self, ReqState},
+        metrics,
+    },
+    services,
+    types::{self, api, domain, storage},
     utils,
 };
 
 #[instrument(skip_all)]
 #[allow(clippy::too_many_arguments)]
-pub async fn do_gsm_actions<F, ApiRequest, FData, Ctx>(
+pub async fn do_gsm_actions<F, ApiRequest, FData>(
     state: &app::AppState,
+    req_state: ReqState,
     payment_data: &mut payments::PaymentData<F>,
     mut connectors: IntoIter<api::ConnectorData>,
     original_connector_data: api::ConnectorData,
     mut router_data: types::RouterData<F, FData, types::PaymentsResponseData>,
     merchant_account: &domain::MerchantAccount,
     key_store: &domain::MerchantKeyStore,
-    operation: &operations::BoxedOperation<'_, F, ApiRequest, Ctx>,
+    operation: &operations::BoxedOperation<'_, F, ApiRequest>,
     customer: &Option<domain::Customer>,
     validate_result: &operations::ValidateResult<'_>,
     schedule_time: Option<time::PrimitiveDateTime>,
     frm_suggestion: Option<storage_enums::FrmSuggestion>,
+    business_profile: &storage::business_profile::BusinessProfile,
 ) -> RouterResult<types::RouterData<F, FData, types::PaymentsResponseData>>
 where
     F: Clone + Send + Sync,
     FData: Send + Sync,
-    payments::PaymentResponse: operations::Operation<F, FData, Ctx>,
+    payments::PaymentResponse: operations::Operation<F, FData>,
 
     payments::PaymentData<F>: ConstructFlowSpecificData<F, FData, types::PaymentsResponseData>,
     types::RouterData<F, FData, types::PaymentsResponseData>: Feature<F, FData>,
     dyn api::Connector: services::api::ConnectorIntegration<F, FData, types::PaymentsResponseData>,
-    Ctx: PaymentMethodRetrieve,
 {
     let mut retries = None;
 
@@ -81,6 +84,7 @@ where
     if should_step_up {
         router_data = do_retry(
             &state.clone(),
+            req_state.clone(),
             original_connector_data,
             operation,
             customer,
@@ -92,6 +96,7 @@ where
             schedule_time,
             true,
             frm_suggestion,
+            business_profile,
         )
         .await?;
     }
@@ -124,6 +129,7 @@ where
 
                     router_data = do_retry(
                         &state.clone(),
+                        req_state.clone(),
                         connector,
                         operation,
                         customer,
@@ -136,6 +142,7 @@ where
                         //this is an auto retry payment, but not step-up
                         false,
                         frm_suggestion,
+                        business_profile,
                     )
                     .await?;
 
@@ -261,10 +268,11 @@ fn get_flow_name<F>() -> RouterResult<String> {
 
 #[allow(clippy::too_many_arguments)]
 #[instrument(skip_all)]
-pub async fn do_retry<F, ApiRequest, FData, Ctx>(
+pub async fn do_retry<F, ApiRequest, FData>(
     state: &routes::AppState,
+    req_state: ReqState,
     connector: api::ConnectorData,
-    operation: &operations::BoxedOperation<'_, F, ApiRequest, Ctx>,
+    operation: &operations::BoxedOperation<'_, F, ApiRequest>,
     customer: &Option<domain::Customer>,
     merchant_account: &domain::MerchantAccount,
     key_store: &domain::MerchantKeyStore,
@@ -274,16 +282,16 @@ pub async fn do_retry<F, ApiRequest, FData, Ctx>(
     schedule_time: Option<time::PrimitiveDateTime>,
     is_step_up: bool,
     frm_suggestion: Option<storage_enums::FrmSuggestion>,
+    business_profile: &storage::business_profile::BusinessProfile,
 ) -> RouterResult<types::RouterData<F, FData, types::PaymentsResponseData>>
 where
     F: Clone + Send + Sync,
     FData: Send + Sync,
-    payments::PaymentResponse: operations::Operation<F, FData, Ctx>,
+    payments::PaymentResponse: operations::Operation<F, FData>,
 
     payments::PaymentData<F>: ConstructFlowSpecificData<F, FData, types::PaymentsResponseData>,
     types::RouterData<F, FData, types::PaymentsResponseData>: Feature<F, FData>,
     dyn api::Connector: services::api::ConnectorIntegration<F, FData, types::PaymentsResponseData>,
-    Ctx: PaymentMethodRetrieve,
 {
     metrics::AUTO_RETRY_PAYMENT_COUNT.add(&metrics::CONTEXT, 1, &[]);
 
@@ -299,6 +307,7 @@ where
 
     payments::call_connector_service(
         state,
+        req_state,
         merchant_account,
         key_store,
         connector,
@@ -310,6 +319,7 @@ where
         schedule_time,
         api::HeaderPayload::default(),
         frm_suggestion,
+        business_profile,
     )
     .await
 }
@@ -376,7 +386,7 @@ where
                         .connector_response_reference_id
                         .clone(),
                     authentication_type: None,
-                    payment_method_id: router_data.payment_method_id,
+                    payment_method_id: payment_data.payment_attempt.payment_method_id.clone(),
                     mandate_id: payment_data
                         .mandate_id
                         .clone()

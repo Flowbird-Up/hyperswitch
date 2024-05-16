@@ -1,4 +1,3 @@
-use api_models::payments::BankDebitData;
 use error_stack::ResultExt;
 use masking::{ExposeInterface, PeekInterface, Secret};
 use serde::{Deserialize, Serialize};
@@ -6,26 +5,25 @@ use serde::{Deserialize, Serialize};
 use crate::{
     connector::utils::{self, CardData, PaymentsAuthorizeRequestData, RouterData},
     core::errors,
-    types::{
-        self, api, domain,
-        storage::{self, enums},
-    },
+    types::{self, api, domain, storage::enums},
     unimplemented_payment_method,
 };
 
-impl TryFrom<(&types::TokenizationRouterData, BankDebitData)> for SquareTokenRequest {
+impl TryFrom<(&types::TokenizationRouterData, domain::BankDebitData)> for SquareTokenRequest {
     type Error = error_stack::Report<errors::ConnectorError>;
     fn try_from(
-        value: (&types::TokenizationRouterData, BankDebitData),
+        value: (&types::TokenizationRouterData, domain::BankDebitData),
     ) -> Result<Self, Self::Error> {
         let (_item, bank_debit_data) = value;
         match bank_debit_data {
-            BankDebitData::AchBankDebit { .. }
-            | BankDebitData::SepaBankDebit { .. }
-            | BankDebitData::BecsBankDebit { .. }
-            | BankDebitData::BacsBankDebit { .. } => Err(errors::ConnectorError::NotImplemented(
-                utils::get_unimplemented_payment_method_error_message("Square"),
-            ))?,
+            domain::BankDebitData::AchBankDebit { .. }
+            | domain::BankDebitData::SepaBankDebit { .. }
+            | domain::BankDebitData::BecsBankDebit { .. }
+            | domain::BankDebitData::BacsBankDebit { .. } => {
+                Err(errors::ConnectorError::NotImplemented(
+                    utils::get_unimplemented_payment_method_error_message("Square"),
+                ))?
+            }
         }
     }
 }
@@ -198,7 +196,7 @@ impl<F, T>
         item: types::ResponseRouterData<F, SquareSessionResponse, T, types::PaymentsResponseData>,
     ) -> Result<Self, Self::Error> {
         Ok(Self {
-            status: storage::enums::AttemptStatus::Pending,
+            status: enums::AttemptStatus::Pending,
             session_token: Some(item.response.session_id.clone().expose()),
             response: Ok(types::PaymentsResponseData::SessionTokenResponse {
                 session_token: item.response.session_id.expose(),
@@ -260,12 +258,12 @@ impl TryFrom<&types::PaymentsAuthorizeRouterData> for SquarePaymentsRequest {
                 let pm_token = item.get_payment_method_token()?;
                 Ok(Self {
                     idempotency_key: Secret::new(item.attempt_id.clone()),
-                    source_id: Secret::new(match pm_token {
+                    source_id: match pm_token {
                         types::PaymentMethodToken::Token(token) => token,
                         types::PaymentMethodToken::ApplePayDecrypt(_) => Err(
                             unimplemented_payment_method!("Apple Pay", "Simplified", "Square"),
                         )?,
-                    }),
+                    },
                     amount_money: SquarePaymentsAmountData {
                         amount: item.request.amount,
                         currency: item.request.currency,
@@ -312,13 +310,13 @@ impl TryFrom<&types::ConnectorAuthType> for SquareAuthType {
                 api_key: api_key.to_owned(),
                 key1: key1.to_owned(),
             }),
-
             types::ConnectorAuthType::HeaderKey { .. }
             | types::ConnectorAuthType::SignatureKey { .. }
             | types::ConnectorAuthType::MultiAuthKey { .. }
             | types::ConnectorAuthType::CurrencyAuthKey { .. }
             | types::ConnectorAuthType::TemporaryAuth { .. }
-            | types::ConnectorAuthType::NoKey { .. } => {
+            | types::ConnectorAuthType::NoKey { .. }
+            | types::ConnectorAuthType::CertificateAuth { .. } => {
                 Err(errors::ConnectorError::FailedToObtainAuthType.into())
             }
         }
