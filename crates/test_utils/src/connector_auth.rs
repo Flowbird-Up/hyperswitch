@@ -16,6 +16,7 @@ pub struct ConnectorAuthentication {
     pub adyen_uk: Option<SignatureKey>,
     pub airwallex: Option<BodyKey>,
     pub authorizedotnet: Option<BodyKey>,
+    pub archipel: Option<BodyKey>,
     pub bambora: Option<BodyKey>,
     pub bankofamerica: Option<SignatureKey>,
     pub billwerk: Option<HeaderKey>,
