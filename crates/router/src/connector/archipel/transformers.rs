@@ -1,6 +1,9 @@
 use serde::{Deserialize, Serialize};
-use masking::Secret;
-use crate::{connector::utils::{PaymentsAuthorizeRequestData},core::errors,types::{self,api, storage::enums}};
+use api_models::payments::AddressDetails;
+use masking::{Secret};
+use crate::{core::errors, types::{self, api, storage::enums}};
+use crate::connector::utils;
+use crate::connector::utils::{AddressDetailsData, RouterData};
 use crate::types::domain;
 
 //TODO: Fill the struct with respective fields
@@ -34,41 +37,165 @@ TryFrom<(
     }
 }
 
-//TODO: Fill the struct with respective fields
 #[derive(Default, Debug, Serialize, Eq, PartialEq)]
-pub struct ArchipelPaymentsRequest {
+#[serde(rename_all = "camelCase")]
+pub struct ArchipelOrder {
     amount: i64,
-    card: ArchipelCard
+    currency: i64,
+    wallet_indicator: String,
+    wallet_provider: String,
 }
 
 #[derive(Default, Debug, Serialize, Eq, PartialEq)]
+pub struct CardExpiryDate {
+    month: Secret<String>,
+    year: Secret<String>,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Serialize, Default, Eq, PartialEq)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum ApplicationSelectionIndicator {
+    #[default]
+    ByDefault,
+    CustomerChoice,
+}
+
+#[derive(Default, Debug, Serialize, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct ArchipelCard {
     number: cards::CardNumber,
-    expiry_month: Secret<String>,
-    expiry_year: Secret<String>,
-    cvc: Secret<String>,
-    complete: bool,
+    expiry: CardExpiryDate,
+    security_code: Secret<String>,
+    card_holder_name: Option<Secret<String>>,
+    application_selection_indicator: ApplicationSelectionIndicator,
+    scheme: Option<String>,
+}
+
+#[derive(Default, Debug, Serialize, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ArchipelCardHolder {
+    billing_address: Option<ArchipelBillingAddress>,
+}
+
+impl TryFrom<Option<ArchipelBillingAddress>> for ArchipelCardHolder {
+    type Error = ();
+    fn try_from(value: Option<ArchipelBillingAddress>) -> Result<Self, Self::Error> {
+        Ok(Self {
+            billing_address: value
+        })
+    }
+}
+
+#[derive(Default, Debug, Serialize, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ArchipelBillingAddress {
+    address: Option<Secret<String>>,
+    postal_code: Option<Secret<String>>,
+}
+
+impl TryFrom<Option<AddressDetails>> for ArchipelBillingAddress {
+    type Error = ();
+    fn try_from(_address_details: Option<AddressDetails>) -> Result<Self, Self::Error> {
+        let details = _address_details.unwrap();
+        Ok(Self {
+            address: details.get_combined_address_line().ok(),
+            postal_code: details.zip,
+        })
+    }
+}
+
+#[derive(Default, Debug, Serialize, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ArchipelCredentialIndicator {
+    status: Option<String>,
+    recurring: Option<bool>,
+    transaction_id: Option<String>,
+}
+
+#[derive(Default, Debug, Serialize, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ArchipelPaymentsRequest {
+    order: ArchipelOrder,
+    card: ArchipelCard,
+    cardholder: Option<ArchipelCardHolder>,
+    #[serde(rename="3DS")]
+    three_ds: Option<String>,
+    credential_indicator: Option<ArchipelCredentialIndicator>,
+    stored_on_file: bool,
+    tenant_id: u32,
+    token_id: Option<String>,
 }
 
 impl TryFrom<&ArchipelRouterData<&types::PaymentsAuthorizeRouterData>> for ArchipelPaymentsRequest  {
     type Error = error_stack::Report<errors::ConnectorError>;
     fn try_from(item: &ArchipelRouterData<&types::PaymentsAuthorizeRouterData>) -> Result<Self,Self::Error> {
-        match item.router_data.request.payment_method_data.clone() {
-            domain::PaymentMethodData::Card(req_card) => {
-                let card = ArchipelCard {
-                    number: req_card.card_number,
-                    expiry_month: req_card.card_exp_month,
-                    expiry_year: req_card.card_exp_year,
-                    cvc: req_card.card_cvc,
-                    complete: item.router_data.request.is_auto_capture()?,
-                };
-                Ok(Self {
-                    amount: item.amount.to_owned(),
-                    card,
-                })
-            }
-            _ => Err(errors::ConnectorError::NotImplemented("Payment methods".to_string()).into()),
-        }
+        let order = ArchipelOrder {
+            amount: item.amount.to_owned(),
+            currency: item.router_data.request.currency.iso_4217().parse::<i64>().unwrap(),
+            // TODO: implement wallet info
+            wallet_indicator: "".to_string(),
+            wallet_provider: "".to_string(),
+        };
+
+
+        let card_data = match item.router_data.request.payment_method_data.clone() {
+           domain::PaymentMethodData::Card(ccard) => {
+               ccard
+           }
+           | domain::PaymentMethodData::Wallet(_)
+           | domain::PaymentMethodData::CardRedirect(_)
+           | domain::PaymentMethodData::PayLater(_)
+           | domain::PaymentMethodData::BankRedirect(_)
+           | domain::PaymentMethodData::BankDebit(_)
+           | domain::PaymentMethodData::BankTransfer(_)
+           | domain::PaymentMethodData::Crypto(_)
+           | domain::PaymentMethodData::MandatePayment
+           | domain::PaymentMethodData::Reward
+           | domain::PaymentMethodData::Upi(_)
+           | domain::PaymentMethodData::Voucher(_)
+           | domain::PaymentMethodData::GiftCard(_)
+           | domain::PaymentMethodData::CardToken(_) => {
+               Err(errors::ConnectorError::NotImplemented(
+                   utils::get_unimplemented_payment_method_error_message("Archipel"),
+               ))?
+           }
+       };
+        let card = ArchipelCard {
+               number: card_data.card_number,
+               expiry: CardExpiryDate {
+                   month: card_data.card_exp_month,
+                   year: card_data.card_exp_year,
+               },
+               security_code: card_data.card_cvc,
+               application_selection_indicator: ApplicationSelectionIndicator::ByDefault,
+               card_holder_name: card_data.nick_name,
+               scheme: card_data.card_issuer
+           };
+
+        let billing_details = item.router_data.get_billing()?.clone().address.clone().or(None);
+        let cardholder = Some(ArchipelCardHolder {
+            billing_address: ArchipelBillingAddress::try_from(billing_details).ok()
+        });
+
+        // TODO: bind credentialsIndicator
+        let credential_indicator = Some(ArchipelCredentialIndicator {
+            status: None,
+            recurring: None,
+            transaction_id: None
+        });
+
+        Ok(Self {
+            order,
+            card,
+            three_ds: None,
+            cardholder,
+            credential_indicator,
+            stored_on_file: false,
+            // TODO: Bind tenantId
+            tenant_id: 0,
+            token_id: None
+        })
     }
 }
 

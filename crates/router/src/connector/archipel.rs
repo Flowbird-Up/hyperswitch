@@ -1,7 +1,5 @@
 use std::fmt::Debug;
-
-use error_stack::{IntoReport, ResultExt};
-
+use error_stack::{report, ResultExt};
 use masking::ExposeInterface;
 use transformers as archipel;
 
@@ -16,7 +14,7 @@ use crate::{
         ErrorResponse, RequestContent,
         Response
     },
-    utils::{self, BytesExt}
+    utils::{BytesExt}
 };
 
 pub mod transformers;
@@ -180,10 +178,9 @@ ConnectorIntegration<
         Ok(RequestContent::Json(Box::new(connector_req)))
     }
 
-    fn build_request(
-        &self,
-        req: &types::PaymentsAuthorizeRouterData,
-        connectors: &settings::Connectors,
+    fn build_request(&self,
+                     req: &types::PaymentsAuthorizeRouterData,
+                     connectors: &settings::Connectors,
     ) -> CustomResult<Option<services::Request>, errors::ConnectorError> {
         Ok(Some(
             services::RequestBuilder::new()
@@ -505,20 +502,18 @@ impl api::IncomingWebhook for Archipel {
         &self,
         _request: &api::IncomingWebhookRequestDetails<'_>,
     ) -> CustomResult<api::webhooks::ObjectReferenceId, errors::ConnectorError> {
-        Err(errors::ConnectorError::WebhooksNotImplemented).into_report()
+        Err(report!(errors::ConnectorError::WebhooksNotImplemented))
     }
 
     fn get_webhook_event_type(
         &self,
         _request: &api::IncomingWebhookRequestDetails<'_>,
     ) -> CustomResult<api::IncomingWebhookEvent, errors::ConnectorError> {
-        Err(errors::ConnectorError::WebhooksNotImplemented).into_report()
+        Err(report!(errors::ConnectorError::WebhooksNotImplemented))
     }
 
-    fn get_webhook_resource_object(
-        &self,
-        _request: &api::IncomingWebhookRequestDetails<'_>,
+    fn get_webhook_resource_object(&self, _request: &api::IncomingWebhookRequestDetails<'_>,
     ) -> CustomResult<Box<dyn masking::ErasedMaskSerialize>, errors::ConnectorError> {
-        Err(errors::ConnectorError::WebhooksNotImplemented).into_report()
+        Err(report!(errors::ConnectorError::WebhooksNotImplemented))
     }
 }
