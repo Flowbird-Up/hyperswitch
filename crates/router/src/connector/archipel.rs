@@ -1,7 +1,9 @@
 use std::fmt::Debug;
 use error_stack::{report, ResultExt};
+use http::StatusCode;
 use serde::Deserialize;
 use common_utils::pii::SecretSerdeValue;
+use diesel_models::enums;
 use masking::ExposeInterface;
 use transformers as archipel;
 
@@ -17,8 +19,7 @@ use crate::{
         Response
     },
     utils::{BytesExt},
-    connector::utils::RouterData,
-};
+    connector::utils::RouterData, consts};
 
 pub mod transformers;
 
@@ -70,10 +71,8 @@ impl ConnectorCommon for Archipel {
         api::CurrencyUnit::Base
     }
 
-    fn get_auth_header(&self, auth_type:&types::ConnectorAuthType)-> CustomResult<Vec<(String,request::Maskable<String>)>,errors::ConnectorError> {
-        let auth =  archipel::ArchipelAuthType::try_from(auth_type)
-            .change_context(errors::ConnectorError::FailedToObtainAuthType)?;
-        Ok(vec![(headers::AUTHORIZATION.to_string(), auth.api_key.expose().into_masked())])
+    fn get_auth_header(&self, _auth_type:&types::ConnectorAuthType)-> CustomResult<Vec<(String,request::Maskable<String>)>,errors::ConnectorError> {
+        Ok(vec![])
     }
 
     fn common_get_content_type(&self) -> &'static str {
@@ -89,20 +88,23 @@ impl ConnectorCommon for Archipel {
         res: Response,
         event_builder: Option<&mut ConnectorEvent>,
     ) -> CustomResult<ErrorResponse, errors::ConnectorError> {
-        let response: archipel::ArchipelErrorResponse = res
-            .response
-            .parse_struct("ArchipelErrorResponse")
-            .change_context(errors::ConnectorError::ResponseDeserializationFailed)?;
+        let response: archipel::ArchipelErrorResponse =
+            archipel::ArchipelErrorResponse {
+                status_code: res.status_code,
+                code: String::new(),
+                message: serde_json::from_slice(&res.response).unwrap_or("").to_string(),
+                reason: Some(StatusCode::from_u16(res.status_code).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR).to_string())
+            };
 
-        event_builder.map(|i| i.set_response_body(&response));
+        event_builder.map(|i| i.set_response_body(&response.message));
         router_env::logger::info!(connector_response=?response);
 
         Ok(ErrorResponse {
-            status_code: res.status_code,
+            status_code: response.status_code,
             code: response.code,
             message: response.message,
             reason: response.reason,
-            attempt_status: None,
+            attempt_status: Some(enums::AttemptStatus::Failure),
             connector_transaction_id: None,
         })
     }
@@ -145,7 +147,7 @@ impl ConnectorIntegration<api::Authorize,
         _req: &types::PaymentsAuthorizeRouterData,
         connectors: &settings::Connectors,
     ) -> CustomResult<String, errors::ConnectorError> {
-        Ok(format!("{}{}", self.base_url(connectors), "v1/payments/authorize"))
+        Ok(format!("{}{}", self.base_url(connectors), "Transaction/v1/pay"))
     }
 
     fn get_request_body(&self,
@@ -189,20 +191,42 @@ impl ConnectorIntegration<api::Authorize,
         event_builder: Option<&mut ConnectorEvent>,
         res: Response,
     ) -> CustomResult<types::PaymentsAuthorizeRouterData,errors::ConnectorError> {
-        let response: archipel::ArchipelPaymentsResponse = res.response.parse_struct("Archipel PaymentsAuthorizeResponse").change_context(errors::ConnectorError::ResponseDeserializationFailed)?;
-        event_builder.map(|i| i.set_response_body(&response));
-        router_env::logger::info!(connector_response=?response);
-        types::RouterData::try_from(types::ResponseRouterData {
-            response,
-            data: data.clone(),
-            http_code: res.status_code,
-        })
-    }
+            let response: archipel::ArchipelPaymentsResponse = res
+                .response
+                .parse_struct("Archipel PaymentsAuthorizeResponse")
+                .change_context(errors::ConnectorError::ResponseDeserializationFailed)?;
+            event_builder.map(|i| i.set_response_body(&response));
+            router_env::logger::info!(connector_response=?response);
+            types::RouterData::try_from(types::ResponseRouterData {
+                response,
+                data: data.clone(),
+                http_code: res.status_code,
+            })
+        }
 
     fn get_error_response(&self,
                           res: Response,
                           event_builder: Option<&mut ConnectorEvent>) -> CustomResult<ErrorResponse,errors::ConnectorError> {
         self.build_error_response(res, event_builder)
+    }
+
+    fn get_5xx_error_response(&self, res: Response, event_builder: Option<&mut ConnectorEvent>) -> CustomResult<ErrorResponse, errors::ConnectorError> {
+        let response: archipel::ArchipelErrorMessage = res
+            .response
+            .parse_struct("ArchipelErrorMessage")
+            .change_context(errors::ConnectorError::ResponseDeserializationFailed)?;
+
+        event_builder.map(|i| i.set_response_body(&serde_json::from_slice(&res.response).unwrap_or("").to_string()));
+        router_env::logger::info!(connector_response=?response);
+
+        Ok(ErrorResponse {
+            status_code: res.status_code,
+            code: response.code,
+            message: String::new(),
+            reason: response.description,
+            attempt_status: Some(enums::AttemptStatus::Failure),
+            connector_transaction_id: None,
+        })
     }
 }
 

@@ -58,7 +58,7 @@ pub enum ArchipelPaymentInitiator {
 
 #[derive(Debug, Serialize, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
-pub struct ArchipelOrder {
+pub struct ArchipelOrderRequest {
     amount: i64,
     currency: String,
     initiator: ArchipelPaymentInitiator,
@@ -179,7 +179,7 @@ pub struct ArchipelCredentialIndicator {
 #[derive(Debug, Serialize, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ArchipelPaymentsRequest {
-    order: ArchipelOrder,
+    order: ArchipelOrderRequest,
     card: Option<ArchipelCard>,
     cardholder: Option<ArchipelCardHolder>,
     wallet: Option<ArchipelWallet>,
@@ -194,7 +194,7 @@ pub struct ArchipelPaymentsRequest {
 impl TryFrom<&ArchipelRouterData<&types::PaymentsAuthorizeRouterData>> for ArchipelPaymentsRequest  {
     type Error = error_stack::Report<errors::ConnectorError>;
     fn try_from(item: &ArchipelRouterData<&types::PaymentsAuthorizeRouterData>) -> Result<Self,Self::Error> {
-        let order = ArchipelOrder {
+        let order = ArchipelOrderRequest {
             amount: item.amount.to_owned(),
             currency: item.router_data.request.currency.to_string(),
             // TODO: Is set by default to Customer
@@ -284,16 +284,13 @@ impl TryFrom<&ArchipelRouterData<&types::PaymentsAuthorizeRouterData>> for Archi
 //TODO: Fill the struct with respective fields
 // Auth Struct
 pub struct ArchipelAuthType {
-    pub(super) api_key: Secret<String>,
 }
 
 impl TryFrom<&types::ConnectorAuthType> for ArchipelAuthType  {
     type Error = error_stack::Report<errors::ConnectorError>;
     fn try_from(auth_type: &types::ConnectorAuthType) -> Result<Self, Self::Error> {
         match auth_type {
-            types::ConnectorAuthType::HeaderKey { api_key } => Ok(Self {
-                api_key: api_key.to_owned(),
-            }),
+            types::ConnectorAuthType::NoKey => Ok(Self {}),
             _ => Err(errors::ConnectorError::FailedToObtainAuthType.into()),
         }
     }
@@ -301,30 +298,65 @@ impl TryFrom<&types::ConnectorAuthType> for ArchipelAuthType  {
 
 // PaymentsResponse
 //TODO: Append the remaining status flags
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "lowercase")]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "UPPERCASE")]
 pub enum ArchipelPaymentStatus {
-    Succeeded,
-    Failed,
-    #[default]
-    Processing,
+    Pending,
+    Accepted,
+    Refused,
+    Error,
+    New,
 }
 
 impl From<ArchipelPaymentStatus> for enums::AttemptStatus {
+    // TODO: Status matches to be defined
     fn from(item: ArchipelPaymentStatus) -> Self {
         match item {
-            ArchipelPaymentStatus::Succeeded => Self::Charged,
-            ArchipelPaymentStatus::Failed => Self::Failure,
-            ArchipelPaymentStatus::Processing => Self::Authorizing,
+            ArchipelPaymentStatus::Accepted => Self::Charged,
+            ArchipelPaymentStatus::Error => Self::Failure,
+            ArchipelPaymentStatus::Pending => Self::Pending,
+            ArchipelPaymentStatus::Refused => Self::RouterDeclined,
+            ArchipelPaymentStatus::New => Self::Started,
         }
     }
 }
 
 //TODO: Fill the struct with respective fields
-#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct ArchipelPaymentsResponse {
-    status: ArchipelPaymentStatus,
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ArchipelErrorResponse {
+    pub status_code: u16,
+    pub code: String,
+    pub message: String,
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Eq, PartialEq, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ArchipelOrderResponse {
     id: String,
+    authorized_amount: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ArchipelErrorMessage {
+    pub code: String,
+    pub description: Option<String>,
+}
+
+//TODO: Fill the struct with respective fields
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ArchipelPaymentsResponse {
+    order: ArchipelOrderResponse,
+    transaction_id: String,
+    transaction_date: String,
+    status: ArchipelPaymentStatus,
+    error: Option<ArchipelErrorMessage>,
+    financial_network_code: Option<String>,
+    issuer_transaction_id: Option<String>,
+    response_code: Option<String>,
+    authorization_code: Option<String>,
+    payment_account_reference: Option<String>,
 }
 
 impl<F,T> TryFrom<types::ResponseRouterData<F, ArchipelPaymentsResponse, T, types::PaymentsResponseData>> for types::RouterData<F, T, types::PaymentsResponseData> {
@@ -333,7 +365,7 @@ impl<F,T> TryFrom<types::ResponseRouterData<F, ArchipelPaymentsResponse, T, type
         Ok(Self {
             status: enums::AttemptStatus::from(item.response.status),
             response: Ok(types::PaymentsResponseData::TransactionResponse {
-                resource_id: types::ResponseId::ConnectorTransactionId(item.response.id),
+                resource_id: types::ResponseId::ConnectorTransactionId(item.response.order.id),
                 redirection_data: None,
                 mandate_reference: None,
                 connector_metadata: None,
@@ -423,11 +455,3 @@ impl TryFrom<types::RefundsResponseRouterData<api::RSync, RefundResponse>> for t
     }
 }
 
-//TODO: Fill the struct with respective fields
-#[derive(Default, Debug, Serialize, Deserialize, PartialEq)]
-pub struct ArchipelErrorResponse {
-    pub status_code: u16,
-    pub code: String,
-    pub message: String,
-    pub reason: Option<String>,
-}
