@@ -122,6 +122,7 @@ pub struct ConnectorConfig {
     #[cfg(feature = "payouts")]
     pub adyen_payout: Option<ConnectorTomlConfig>,
     pub airwallex: Option<ConnectorTomlConfig>,
+    pub archipel: Option<ConnectorTomlConfig>,
     pub authorizedotnet: Option<ConnectorTomlConfig>,
     pub bankofamerica: Option<ConnectorTomlConfig>,
     pub billwerk: Option<ConnectorTomlConfig>,
@@ -250,6 +251,7 @@ impl ConnectorConfig {
             Connector::Aci => Ok(connector_data.aci),
             Connector::Adyen => Ok(connector_data.adyen),
             Connector::Airwallex => Ok(connector_data.airwallex),
+            Connector::Archipel => Ok(connector_data.archipel),
             Connector::Authorizedotnet => Ok(connector_data.authorizedotnet),
             Connector::Bankofamerica => Ok(connector_data.bankofamerica),
             Connector::Billwerk => Ok(connector_data.billwerk),
