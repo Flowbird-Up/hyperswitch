@@ -211,6 +211,7 @@ impl ForeignTryFrom<api_enums::Connector> for common_enums::RoutableConnectors {
             api_enums::Connector::Adyen => Self::Adyen,
             api_enums::Connector::Airwallex => Self::Airwallex,
             api_enums::Connector::Authorizedotnet => Self::Authorizedotnet,
+            api_enums::Connector::Archipel => Self::Archipel,
             api_enums::Connector::Bambora => Self::Bambora,
             api_enums::Connector::Bankofamerica => Self::Bankofamerica,
             api_enums::Connector::Billwerk => Self::Billwerk,
