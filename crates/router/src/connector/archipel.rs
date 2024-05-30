@@ -112,6 +112,24 @@ impl ConnectorCommon for Archipel {
 
 impl ConnectorValidation for Archipel {
     //TODO: implement functions when support enabled
+    // Allowed Capture methods for archipel connector
+    fn validate_capture_method(&self,
+                               capture_method: Option<enums::CaptureMethod>,
+                               _pmt: Option<enums::PaymentMethodType>) -> CustomResult<(), errors::ConnectorError> {
+        let capture_method = capture_method.unwrap_or_default();
+        match capture_method {
+            enums::CaptureMethod::Automatic => Ok(()),
+            enums::CaptureMethod::Manual
+            | enums::CaptureMethod::ManualMultiple
+            | enums::CaptureMethod::Scheduled => {
+                Err(errors::ConnectorError::NotSupported {
+                    message: capture_method.to_string(),
+                    connector: self.id(),
+                }
+                    .into())
+            }
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -142,12 +160,22 @@ impl ConnectorIntegration<api::Authorize,
         self.common_get_content_type()
     }
 
-    fn get_url(
-        &self,
-        _req: &types::PaymentsAuthorizeRouterData,
-        connectors: &settings::Connectors,
-    ) -> CustomResult<String, errors::ConnectorError> {
-        Ok(format!("{}{}", self.base_url(connectors), "Transaction/v1/pay"))
+    fn get_url(&self,
+               _req: &types::PaymentsAuthorizeRouterData,
+               connectors: &settings::Connectors, ) -> CustomResult<String, errors::ConnectorError> {
+        let capture_method = _req.request.capture_method.ok_or(errors::ConnectorError::CaptureMethodNotSupported)?;
+        match capture_method {
+            enums::CaptureMethod::Automatic => {
+                Ok(format!("{}{}", self.base_url(connectors), "Transaction/v1/pay"))
+            },
+            enums::CaptureMethod::Manual => {
+                Ok(format!("{}{}", self.base_url(connectors), "Transaction/v1/authorize"))
+            }
+            enums::CaptureMethod::ManualMultiple
+            |enums::CaptureMethod::Scheduled => {
+                Err(report!(errors::ConnectorError::CaptureMethodNotSupported))
+            }
+        }
     }
 
     fn get_request_body(&self,
@@ -162,7 +190,7 @@ impl ConnectorIntegration<api::Authorize,
                 req,
                 tenant
             ))?;
-        let connector_req = archipel::ArchipelPaymentsRequest::try_from(&connector_router_data)?;
+        let connector_req = archipel::ArchipelAuthorizationRequest::try_from(&connector_router_data)?;
         Ok(RequestContent::Json(Box::new(connector_req)))
     }
 
@@ -191,18 +219,18 @@ impl ConnectorIntegration<api::Authorize,
         event_builder: Option<&mut ConnectorEvent>,
         res: Response,
     ) -> CustomResult<types::PaymentsAuthorizeRouterData,errors::ConnectorError> {
-            let response: archipel::ArchipelPaymentsResponse = res
-                .response
-                .parse_struct("Archipel PaymentsAuthorizeResponse")
-                .change_context(errors::ConnectorError::ResponseDeserializationFailed)?;
-            event_builder.map(|i| i.set_response_body(&response));
-            router_env::logger::info!(connector_response=?response);
-            types::RouterData::try_from(types::ResponseRouterData {
-                response,
-                data: data.clone(),
-                http_code: res.status_code,
-            })
-        }
+        let response: archipel::ArchipelPaymentsResponse = res
+            .response
+            .parse_struct("PaymentsAuthorizeResponse")
+            .change_context(errors::ConnectorError::ResponseDeserializationFailed)?;
+        event_builder.map(|i| i.set_response_body(&response));
+        router_env::logger::info!(connector_response=?response);
+        types::RouterData::try_from(types::ResponseRouterData {
+            response,
+            data: data.clone(),
+            http_code: res.status_code,
+        })
+    }
 
     fn get_error_response(&self,
                           res: Response,

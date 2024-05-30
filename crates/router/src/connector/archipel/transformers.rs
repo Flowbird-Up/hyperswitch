@@ -1,3 +1,4 @@
+use error_stack::report;
 use serde::{Deserialize, Serialize};
 use api_models::payments::AddressDetails;
 use masking::{Secret};
@@ -13,17 +14,30 @@ pub struct ArchipelRouterData<T> {
     pub tenant_id: String,
 }
 
-impl<T>
-TryFrom<(&api::CurrencyUnit, enums::Currency, i64, T, String)> for ArchipelRouterData<T> {
+impl<T> TryFrom<(&api::CurrencyUnit, enums::Currency, i64, T, String)> for ArchipelRouterData<T> {
     type Error = error_stack::Report<errors::ConnectorError>;
-    fn try_from((_currency_unit, _currency, amount, item, tenant): (&api::CurrencyUnit, enums::Currency, i64, T, String),
-    ) -> Result<Self, Self::Error> {
+    fn try_from((_currency_unit, _currency, amount, item, tenant):
+                (&api::CurrencyUnit, enums::Currency, i64, T, String), ) -> Result<Self, Self::Error> {
         //Todo :  use utils to convert the amount to the type of amount that a connector accepts
         Ok(Self {
             amount,
             router_data: item,
             tenant_id: tenant
         })
+    }
+}
+
+//TODO: Fill the struct with respective fields
+// Auth Struct
+pub struct ArchipelAuthType {}
+
+impl TryFrom<&types::ConnectorAuthType> for ArchipelAuthType  {
+    type Error = error_stack::Report<errors::ConnectorError>;
+    fn try_from(auth_type: &types::ConnectorAuthType) -> Result<Self, Self::Error> {
+        match auth_type {
+            types::ConnectorAuthType::NoKey => Ok(Self {}),
+            _ => Err(errors::ConnectorError::FailedToObtainAuthType.into()),
+        }
     }
 }
 
@@ -178,7 +192,7 @@ pub struct ArchipelCredentialIndicator {
 
 #[derive(Debug, Serialize, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
-pub struct ArchipelPaymentsRequest {
+pub struct ArchipelAuthorizationRequest {
     order: ArchipelOrderRequest,
     card: Option<ArchipelCard>,
     cardholder: Option<ArchipelCardHolder>,
@@ -191,7 +205,7 @@ pub struct ArchipelPaymentsRequest {
     token_id: Option<String>,
 }
 
-impl TryFrom<&ArchipelRouterData<&types::PaymentsAuthorizeRouterData>> for ArchipelPaymentsRequest  {
+impl TryFrom<&ArchipelRouterData<&types::PaymentsAuthorizeRouterData>> for ArchipelAuthorizationRequest  {
     type Error = error_stack::Report<errors::ConnectorError>;
     fn try_from(item: &ArchipelRouterData<&types::PaymentsAuthorizeRouterData>) -> Result<Self,Self::Error> {
         let order = ArchipelOrderRequest {
@@ -200,6 +214,7 @@ impl TryFrom<&ArchipelRouterData<&types::PaymentsAuthorizeRouterData>> for Archi
             // TODO: Is set by default to Customer
             initiator: ArchipelPaymentInitiator::Customer
         };
+        let billing_details = item.router_data.get_billing()?.clone().address.clone().or(None);
 
         let payment_information = match item.router_data.request.payment_method_data.clone() {
             domain::PaymentMethodData::Card(ccard) => {
@@ -215,8 +230,11 @@ impl TryFrom<&ArchipelRouterData<&types::PaymentsAuthorizeRouterData>> for Archi
                            // TODO: Set with default value. Not yet implemented on HP
                            application_selection_indicator: ApplicationSelectionIndicator::ByDefault,
                            //  TODO: card_holder_name not implemented in Card struct
-                           card_holder_name: None,
-                           scheme: Some(ccard.get_card_issuer().ok().unwrap().to_string().to_uppercase())
+                           card_holder_name: match !billing_details.is_none() {
+                               true => billing_details.clone().unwrap().get_optional_full_name(),
+                               false => None
+                           },
+                           scheme: Some(ccard.card_issuer.or(Some("VISA".to_string())).clone().unwrap().to_uppercase())
                        },
                        wallet: None,
                        three_ds: None,
@@ -251,7 +269,6 @@ impl TryFrom<&ArchipelRouterData<&types::PaymentsAuthorizeRouterData>> for Archi
             }
         };
 
-        let billing_details = item.router_data.get_billing()?.clone().address.clone().or(None);
         let cardholder = Some(ArchipelCardHolder {
             billing_address: ArchipelBillingAddress::try_from(billing_details).ok()
         });
@@ -281,23 +298,7 @@ impl TryFrom<&ArchipelRouterData<&types::PaymentsAuthorizeRouterData>> for Archi
     }
 }
 
-//TODO: Fill the struct with respective fields
-// Auth Struct
-pub struct ArchipelAuthType {
-}
-
-impl TryFrom<&types::ConnectorAuthType> for ArchipelAuthType  {
-    type Error = error_stack::Report<errors::ConnectorError>;
-    fn try_from(auth_type: &types::ConnectorAuthType) -> Result<Self, Self::Error> {
-        match auth_type {
-            types::ConnectorAuthType::NoKey => Ok(Self {}),
-            _ => Err(errors::ConnectorError::FailedToObtainAuthType.into()),
-        }
-    }
-}
-
 // PaymentsResponse
-//TODO: Append the remaining status flags
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "UPPERCASE")]
 pub enum ArchipelPaymentStatus {
@@ -330,6 +331,7 @@ pub struct ArchipelErrorResponse {
     pub reason: Option<String>,
 }
 
+// TODO: Change captured_amount by authorized_amount
 #[derive(Debug, Serialize, Deserialize, Eq, PartialEq, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct ArchipelOrderResponse {
@@ -359,22 +361,88 @@ pub struct ArchipelPaymentsResponse {
     payment_account_reference: Option<String>,
 }
 
-impl<F,T> TryFrom<types::ResponseRouterData<F, ArchipelPaymentsResponse, T, types::PaymentsResponseData>> for types::RouterData<F, T, types::PaymentsResponseData> {
+
+// Handle responses for Payments Authorization Flow
+impl<F> TryFrom<
+    types::ResponseRouterData<F,
+        ArchipelPaymentsResponse,
+        types::PaymentsAuthorizeData,
+        types::PaymentsResponseData>> for types::RouterData<F, types::PaymentsAuthorizeData, types::PaymentsResponseData> {
     type Error = error_stack::Report<errors::ConnectorError>;
-    fn try_from(item: types::ResponseRouterData<F, ArchipelPaymentsResponse, T, types::PaymentsResponseData>) -> Result<Self,Self::Error> {
-        Ok(Self {
-            status: enums::AttemptStatus::from(item.response.status),
-            response: Ok(types::PaymentsResponseData::TransactionResponse {
-                resource_id: types::ResponseId::ConnectorTransactionId(item.response.order.id),
-                redirection_data: None,
-                mandate_reference: None,
-                connector_metadata: None,
-                network_txn_id: None,
-                connector_response_reference_id: None,
-                incremental_authorization_allowed: None,
-            }),
-            ..item.data
-        })
+    fn try_from(item: types::ResponseRouterData<
+        F,
+        ArchipelPaymentsResponse,
+        types::PaymentsAuthorizeData,
+        types::PaymentsResponseData>) -> Result<Self,Self::Error> {
+        let capture_method = item.data.request.capture_method.unwrap().clone();
+        match capture_method {
+            enums::CaptureMethod::Automatic => {
+                // Receive Autho + Capture response from Archipel ([/pay])
+                Ok(Self {
+                    status: enums::AttemptStatus::from(item.response.status),
+                    response: Ok(types::PaymentsResponseData::TransactionResponse {
+                        resource_id: types::ResponseId::ConnectorTransactionId(item.response.transaction_id),
+                        redirection_data: None,
+                        mandate_reference: None,
+                        connector_metadata: None,
+                        network_txn_id: None,
+                        connector_response_reference_id: None,
+                        incremental_authorization_allowed: None,
+                    }),
+                    amount_captured: Some(item.response.order.captured_amount),
+                    ..item.data
+                })
+            },
+            enums::CaptureMethod::Manual => {
+                // Receive Authorization only response from Archipel
+                // TODO: Implement the case for Authorization only ([/authorize])
+                Err(report!(errors::ConnectorError::NotSupported {
+                    message: "Manual capture is not fully implemented".to_string(),
+                    connector: "Archipel"
+                }))
+            },
+            enums::CaptureMethod::Scheduled | enums::CaptureMethod::ManualMultiple => {
+                Err(report!(errors::ConnectorError::NotSupported {
+                    message: "Only Automatic and Manual capture are allowed".to_string(),
+                    connector: "Archipel"
+                }))
+            }
+        }
+    }
+}
+
+
+//TODO: Handle response for Payments Sync flow
+impl<F> TryFrom<types::ResponseRouterData<F,
+    ArchipelPaymentsResponse,
+    types::PaymentsSyncData,
+    types::PaymentsResponseData>> for types::RouterData<F, types::PaymentsSyncData, types::PaymentsResponseData> {
+    type Error = error_stack::Report<errors::ConnectorError>;
+    fn try_from(item: types::ResponseRouterData<
+        F,
+        ArchipelPaymentsResponse,
+        types::PaymentsSyncData,
+        types::PaymentsResponseData>) -> Result<Self,Self::Error> {
+        Err(report!(errors::ConnectorError::NotImplemented(
+            "Response Handling for Capture flow not implemented on Archipel connector".to_string()
+        )))
+    }
+}
+
+//TODO: Handle response for Payments Capture flow
+impl<F> TryFrom<types::ResponseRouterData<F,
+    ArchipelPaymentsResponse,
+    types::PaymentsCaptureData,
+    types::PaymentsResponseData>> for types::RouterData<F, types::PaymentsCaptureData, types::PaymentsResponseData> {
+    type Error = error_stack::Report<errors::ConnectorError>;
+    fn try_from(item: types::ResponseRouterData<
+        F,
+        ArchipelPaymentsResponse,
+        types::PaymentsCaptureData,
+        types::PaymentsResponseData>) -> Result<Self,Self::Error> {
+        Err(report!(errors::ConnectorError::NotImplemented(
+            "Response Handling for Capture flow not implemented on Archipel connector".to_string()
+        )))
     }
 }
 
