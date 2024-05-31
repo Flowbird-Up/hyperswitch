@@ -183,9 +183,16 @@ impl TryFrom<Option<AddressDetails>> for ArchipelBillingAddress {
 }
 
 #[derive(Debug, Serialize, Eq, PartialEq)]
+#[serde(rename_all = "UPPERCASE")]
+pub enum ArchipelCredentialIndicatorStatus {
+    Initial,
+    Subsequent
+}
+
+#[derive(Debug, Serialize, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ArchipelCredentialIndicator {
-    status: Option<String>,
+    status: ArchipelCredentialIndicatorStatus,
     recurring: Option<bool>,
     transaction_id: Option<String>,
 }
@@ -211,7 +218,6 @@ impl TryFrom<&ArchipelRouterData<&types::PaymentsAuthorizeRouterData>> for Archi
         let order = ArchipelOrderRequest {
             amount: item.amount.to_owned(),
             currency: item.router_data.request.currency.to_string(),
-            // TODO: Is set by default to Customer
             initiator: ArchipelPaymentInitiator::Customer
         };
         let billing_details = item.router_data.get_billing()?.clone().address.clone().or(None);
@@ -229,11 +235,11 @@ impl TryFrom<&ArchipelRouterData<&types::PaymentsAuthorizeRouterData>> for Archi
                            security_code: ccard.card_cvc.clone(),
                            // TODO: Set with default value. Not yet implemented on HP
                            application_selection_indicator: ApplicationSelectionIndicator::ByDefault,
-                           //  TODO: card_holder_name not implemented in Card struct
                            card_holder_name: match !billing_details.is_none() {
                                true => billing_details.clone().unwrap().get_optional_full_name(),
                                false => None
                            },
+                           // TODO: Check mapping scheme card Hs/Archipel
                            scheme: Some(ccard.card_issuer.or(Some("VISA".to_string())).clone().unwrap().to_uppercase())
                        },
                        wallet: None,
@@ -241,6 +247,7 @@ impl TryFrom<&ArchipelRouterData<&types::PaymentsAuthorizeRouterData>> for Archi
                    }
                 )
             }
+            // TODO: Implement wallet
             | domain::PaymentMethodData::Wallet(_)
             | domain::PaymentMethodData::CardRedirect(_)
             | domain::PaymentMethodData::PayLater(_)
@@ -274,7 +281,11 @@ impl TryFrom<&ArchipelRouterData<&types::PaymentsAuthorizeRouterData>> for Archi
         });
 
         // TODO: bind credentialsIndicator
-        let credential_indicator = None;
+        let credential_indicator = Some(ArchipelCredentialIndicator {
+            status: ArchipelCredentialIndicatorStatus::Initial,
+            recurring: Some(false),
+            transaction_id: None
+        });
 
         // TODO: bind stored_on_file. False by default
         let stored_on_file = false;
