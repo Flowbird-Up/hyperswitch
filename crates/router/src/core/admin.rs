@@ -1848,6 +1848,10 @@ pub(crate) fn validate_auth_and_metadata_type(
             airwallex::transformers::AirwallexAuthType::try_from(val)?;
             Ok(())
         }
+        api_enums::Connector::Archipel => {
+            archipel::transformers::ArchipelAuthType::try_from(val)?;
+            Ok(())
+        }
         api_enums::Connector::Authorizedotnet => {
             authorizedotnet::transformers::AuthorizedotnetAuthType::try_from(val)?;
             Ok(())
