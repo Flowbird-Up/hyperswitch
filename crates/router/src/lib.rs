@@ -32,7 +32,7 @@ use actix_web::{
 use http::StatusCode;
 use hyperswitch_interfaces::secrets_interface::secret_state::SecuredSecret;
 use router_env::tracing::Instrument;
-use routes::AppState;
+use routes::{AppState, SessionState};
 use storage_impl::errors::ApplicationResult;
 use tokio::sync::{mpsc, oneshot};
 
@@ -72,6 +72,10 @@ pub mod headers {
     pub const X_REQUEST_ID: &str = "X-Request-Id";
     pub const STRIPE_COMPATIBLE_WEBHOOK_SIGNATURE: &str = "Stripe-Signature";
     pub const STRIPE_COMPATIBLE_CONNECT_ACCOUNT: &str = "Stripe-Account";
+    pub const X_CLIENT_VERSION: &str = "X-Client-Version";
+    pub const X_CLIENT_SOURCE: &str = "X-Client-Source";
+    pub const X_PAYMENT_CONFIRM_SOURCE: &str = "X-Payment-Confirm-Source";
+    pub const CONTENT_LENGTH: &str = "Content-Length";
 }
 
 pub mod pii {
