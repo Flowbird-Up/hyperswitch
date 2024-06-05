@@ -853,6 +853,57 @@
         ]
       }
     },
+    "/{payment_id}/complete_authorize": {
+      "post": {
+        "tags": [
+          "Payments"
+        ],
+        "summary": "Payments - Complete Authorize",
+        "description": "Payments - Complete Authorize\n\n",
+        "operationId": "Complete Authorize a Payment",
+        "parameters": [
+          {
+            "name": "payment_id",
+            "in": "path",
+            "description": "The identifier for payment",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaymentsCompleteAuthorizeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Payments Complete Authorize Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing mandatory fields"
+          }
+        },
+        "security": [
+          {
+            "publishable_key": []
+          }
+        ]
+      }
+    },
     "/refunds": {
       "post": {
         "tags": [
@@ -6898,6 +6949,14 @@
           "use_billing_as_payment_method_billing": {
             "type": "boolean",
             "nullable": true
+          },
+          "extended_card_info_config": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ExtendedCardInfoConfig"
+              }
+            ],
+            "nullable": true
           }
         }
       },
@@ -6931,7 +6990,8 @@
           "amount": {
             "type": "integer",
             "format": "int64",
-            "description": "The capture amount. Amount for the payment in lowest denomination of the currency. (i.e) in cents for USD denomination, in paisa for INR denomination etc.,"
+            "description": "The capture amount. Amount for the payment in lowest denomination of the currency. (i.e) in cents for USD denomination, in paisa for INR denomination etc.,",
+            "example": 6540
           },
           "currency": {
             "allOf": [
@@ -6994,9 +7054,10 @@
         "type": "object",
         "required": [
           "card_number",
-          "expiry_month",
-          "expiry_year",
-          "card_holder_name"
+          "card_exp_month",
+          "card_exp_year",
+          "card_holder_name",
+          "card_cvc"
         ],
         "properties": {
           "card_number": {
@@ -7004,18 +7065,60 @@
             "description": "The card number",
             "example": "4242424242424242"
           },
-          "expiry_month": {
+          "card_exp_month": {
             "type": "string",
-            "description": "The card's expiry month"
+            "description": "The card's expiry month",
+            "example": "24"
           },
-          "expiry_year": {
+          "card_exp_year": {
             "type": "string",
-            "description": "The card's expiry year"
+            "description": "The card's expiry year",
+            "example": "24"
           },
           "card_holder_name": {
             "type": "string",
             "description": "The card holder's name",
-            "example": "John Doe"
+            "example": "John Test"
+          },
+          "card_cvc": {
+            "type": "string",
+            "description": "The CVC number for the card",
+            "example": "242"
+          },
+          "card_issuer": {
+            "type": "string",
+            "description": "The name of the issuer of card",
+            "example": "chase",
+            "nullable": true
+          },
+          "card_network": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CardNetwork"
+              }
+            ],
+            "nullable": true
+          },
+          "card_type": {
+            "type": "string",
+            "example": "CREDIT",
+            "nullable": true
+          },
+          "card_issuing_country": {
+            "type": "string",
+            "example": "INDIA",
+            "nullable": true
+          },
+          "bank_code": {
+            "type": "string",
+            "example": "JP_AMEX",
+            "nullable": true
+          },
+          "nick_name": {
+            "type": "string",
+            "description": "The card holder's nick name",
+            "example": "John Test",
+            "nullable": true
           }
         }
       },
@@ -7196,6 +7299,35 @@
           "Maestro"
         ]
       },
+      "CardPayout": {
+        "type": "object",
+        "required": [
+          "card_number",
+          "expiry_month",
+          "expiry_year",
+          "card_holder_name"
+        ],
+        "properties": {
+          "card_number": {
+            "type": "string",
+            "description": "The card number",
+            "example": "4242424242424242"
+          },
+          "expiry_month": {
+            "type": "string",
+            "description": "The card's expiry month"
+          },
+          "expiry_year": {
+            "type": "string",
+            "description": "The card's expiry year"
+          },
+          "card_holder_name": {
+            "type": "string",
+            "description": "The card holder's name",
+            "example": "John Doe"
+          }
+        }
+      },
       "CardRedirectData": {
         "oneOf": [
           {
@@ -7264,6 +7396,29 @@
       },
       "CashappQr": {
         "type": "object"
+      },
+      "ChargeRefunds": {
+        "type": "object",
+        "description": "Charge object for refunds",
+        "required": [
+          "charge_id"
+        ],
+        "properties": {
+          "charge_id": {
+            "type": "string",
+            "description": "Identifier for charge created for the payment"
+          },
+          "revert_platform_fee": {
+            "type": "boolean",
+            "description": "Toggle for reverting the application fee that was collected for the payment.\nIf set to false, the funds are pulled from the destination account.",
+            "nullable": true
+          },
+          "revert_transfer": {
+            "type": "boolean",
+            "description": "Toggle for reverting the transfer that was made during the charge.\nIf set to false, the funds are pulled from the main platform's account.",
+            "nullable": true
+          }
+        }
       },
       "Comparison": {
         "type": "object",
@@ -7338,6 +7493,7 @@
           "globalpay",
           "globepay",
           "gocardless",
+          "gpayments",
           "helcim",
           "iatapay",
           "klarna",
@@ -7350,6 +7506,7 @@
           "nuvei",
           "opennode",
           "payme",
+          "payone",
           "paypal",
           "payu",
           "placetopay",
@@ -7832,6 +7989,10 @@
           "pay_currency": {
             "type": "string",
             "nullable": true
+          },
+          "network": {
+            "type": "string",
+            "nullable": true
           }
         }
       },
@@ -8029,7 +8190,9 @@
           "customer_id": {
             "type": "string",
             "description": "The unique identifier of the customer.",
-            "example": "cus_meowerunwiuwiwqw"
+            "example": "cus_y3oqhf46pyzuxjbcn2giaqnb44",
+            "maxLength": 64,
+            "minLength": 1
           },
           "payment_method": {
             "$ref": "#/components/schemas/PaymentMethod"
@@ -8084,7 +8247,53 @@
         "properties": {
           "id": {
             "type": "string",
-            "description": "The identifier for the customer."
+            "description": "The identifier for the customer.",
+            "example": "cus_y3oqhf46pyzuxjbcn2giaqnb44",
+            "maxLength": 64,
+            "minLength": 1
+          },
+          "name": {
+            "type": "string",
+            "description": "The customer's name",
+            "example": "John Doe",
+            "nullable": true,
+            "maxLength": 255
+          },
+          "email": {
+            "type": "string",
+            "description": "The customer's email address",
+            "example": "johntest@test.com",
+            "nullable": true,
+            "maxLength": 255
+          },
+          "phone": {
+            "type": "string",
+            "description": "The customer's phone number",
+            "example": "3141592653",
+            "nullable": true,
+            "maxLength": 10
+          },
+          "phone_country_code": {
+            "type": "string",
+            "description": "The country code for the customer's phone number",
+            "example": "+1",
+            "nullable": true,
+            "maxLength": 2
+          }
+        }
+      },
+      "CustomerDetailsResponse": {
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The identifier for the customer.",
+            "example": "cus_y3oqhf46pyzuxjbcn2giaqnb44",
+            "maxLength": 64,
+            "minLength": 1
           },
           "name": {
             "type": "string",
@@ -8142,7 +8351,9 @@
           "customer_id": {
             "type": "string",
             "description": "The unique identifier of the customer.",
-            "example": "cus_meowerunwiuwiwqw"
+            "example": "cus_y3oqhf46pyzuxjbcn2giaqnb44",
+            "maxLength": 64,
+            "minLength": 1
           },
           "payment_method": {
             "$ref": "#/components/schemas/PaymentMethod"
@@ -8289,7 +8500,9 @@
             "type": "string",
             "description": "The identifier for the customer object. If not provided the customer ID will be autogenerated.",
             "example": "cus_y3oqhf46pyzuxjbcn2giaqnb44",
-            "maxLength": 255
+            "nullable": true,
+            "maxLength": 64,
+            "minLength": 1
           },
           "name": {
             "type": "string",
@@ -8350,9 +8563,10 @@
         "properties": {
           "customer_id": {
             "type": "string",
-            "description": "The identifier for the customer object. If not provided the customer ID will be autogenerated.",
+            "description": "The identifier for the customer object",
             "example": "cus_y3oqhf46pyzuxjbcn2giaqnb44",
-            "maxLength": 255
+            "maxLength": 64,
+            "minLength": 1
           },
           "name": {
             "type": "string",
@@ -8432,7 +8646,10 @@
         ],
         "properties": {
           "customer_id": {
-            "type": "string"
+            "type": "string",
+            "example": "cus_y3oqhf46pyzuxjbcn2giaqnb44",
+            "maxLength": 64,
+            "minLength": 1
           },
           "payment_method_id": {
             "type": "string"
@@ -8684,7 +8901,10 @@
         "properties": {
           "customer_id": {
             "type": "string",
-            "description": "customer_id to which this ephemeral key belongs to"
+            "description": "customer_id to which this ephemeral key belongs to",
+            "example": "cus_y3oqhf46pyzuxjbcn2giaqnb44",
+            "maxLength": 64,
+            "minLength": 1
           },
           "created_at": {
             "type": "integer",
@@ -9079,6 +9299,12 @@
           {
             "type": "string",
             "enum": [
+              "user_crypto_currency_network"
+            ]
+          },
+          {
+            "type": "string",
+            "enum": [
               "user_billing_name"
             ]
           },
@@ -9304,8 +9530,7 @@
         "type": "object",
         "description": "Details of FrmPaymentMethod are mentioned here... it should be passed in payment connector create api call, and stored in merchant_connector_table",
         "required": [
-          "payment_method",
-          "payment_method_types"
+          "payment_method"
         ],
         "properties": {
           "payment_method": {
@@ -9316,7 +9541,16 @@
             "items": {
               "$ref": "#/components/schemas/FrmPaymentMethodType"
             },
-            "description": "payment method types(credit, debit) that can be used in the payment"
+            "description": "payment method types(credit, debit) that can be used in the payment. This field is deprecated. It has not been removed to provide backward compatibility.",
+            "nullable": true
+          },
+          "flow": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FrmPreferredFlowTypes"
+              }
+            ],
+            "nullable": true
           }
         },
         "additionalProperties": false
@@ -10065,7 +10299,8 @@
           "amount": {
             "type": "integer",
             "format": "int64",
-            "description": "Amount the authorization has been made for"
+            "description": "Amount the authorization has been made for",
+            "example": 6540
           },
           "status": {
             "$ref": "#/components/schemas/AuthorizationStatus"
@@ -10081,9 +10316,7 @@
             "nullable": true
           },
           "previously_authorized_amount": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Previously authorized amount for the payment"
+            "$ref": "#/components/schemas/MinorUnit"
           }
         }
       },
@@ -11536,6 +11769,11 @@
           }
         }
       },
+      "MinorUnit": {
+        "type": "integer",
+        "format": "int64",
+        "description": "This Unit struct represents MinorUnit in which core amount works"
+      },
       "MobilePayRedirection": {
         "type": "object"
       },
@@ -11573,7 +11811,8 @@
         "type": "string",
         "enum": [
           "confirm",
-          "sync"
+          "sync",
+          "complete_authorize"
         ]
       },
       "NextActionData": {
@@ -11671,6 +11910,25 @@
           },
           {
             "type": "object",
+            "description": "Contains url to fetch Qr code data",
+            "required": [
+              "qr_code_fetch_url",
+              "type"
+            ],
+            "properties": {
+              "qr_code_fetch_url": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "fetch_qr_code_information"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
             "description": "Contains the download url and the reference number for transaction",
             "required": [
               "voucher_details",
@@ -11726,6 +11984,24 @@
                 "type": "string",
                 "enum": [
                   "three_ds_invoke"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "next_action_data",
+              "type"
+            ],
+            "properties": {
+              "next_action_data": {
+                "$ref": "#/components/schemas/SdkNextActionData"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "invoke_sdk_client"
                 ]
               }
             }
@@ -12356,7 +12632,8 @@
           "amount": {
             "type": "integer",
             "format": "int64",
-            "description": "The payment attempt amount. Amount for the payment in lowest denomination of the currency. (i.e) in cents for USD denomination, in paisa for INR denomination etc.,"
+            "description": "The payment attempt amount. Amount for the payment in lowest denomination of the currency. (i.e) in cents for USD denomination, in paisa for INR denomination etc.,",
+            "example": 6540
           },
           "currency": {
             "allOf": [
@@ -12461,8 +12738,82 @@
             "type": "string",
             "description": "error message unified across the connectors is received here if there was an error while calling connector",
             "nullable": true
+          },
+          "client_source": {
+            "type": "string",
+            "description": "Value passed in X-CLIENT-SOURCE header during payments confirm request by the client",
+            "nullable": true
+          },
+          "client_version": {
+            "type": "string",
+            "description": "Value passed in X-CLIENT-VERSION header during payments confirm request by the client",
+            "nullable": true
           }
         }
+      },
+      "PaymentChargeRequest": {
+        "type": "object",
+        "required": [
+          "charge_type",
+          "fees",
+          "transfer_account_id"
+        ],
+        "properties": {
+          "charge_type": {
+            "$ref": "#/components/schemas/PaymentChargeType"
+          },
+          "fees": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Platform fees to be collected on the payment"
+          },
+          "transfer_account_id": {
+            "type": "string",
+            "description": "Identifier for the reseller's account to send the funds to"
+          }
+        }
+      },
+      "PaymentChargeResponse": {
+        "type": "object",
+        "required": [
+          "charge_type",
+          "application_fees",
+          "transfer_account_id"
+        ],
+        "properties": {
+          "charge_id": {
+            "type": "string",
+            "description": "Identifier for charge created for the payment",
+            "nullable": true
+          },
+          "charge_type": {
+            "$ref": "#/components/schemas/PaymentChargeType"
+          },
+          "application_fees": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Platform fees collected on the payment"
+          },
+          "transfer_account_id": {
+            "type": "string",
+            "description": "Identifier for the reseller's account where the funds were transferred"
+          }
+        }
+      },
+      "PaymentChargeType": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "Stripe"
+            ],
+            "properties": {
+              "Stripe": {
+                "$ref": "#/components/schemas/StripeChargeType"
+              }
+            }
+          }
+        ]
       },
       "PaymentCreatePaymentLinkConfig": {
         "allOf": [
@@ -12671,8 +13022,10 @@
           "customer_id": {
             "type": "string",
             "description": "The identifier for customer",
-            "example": "cus_meowuwunwiuwiwqw",
-            "nullable": true
+            "example": "cus_y3oqhf46pyzuxjbcn2giaqnb44",
+            "nullable": true,
+            "maxLength": 64,
+            "minLength": 1
           },
           "starting_after": {
             "type": "string",
@@ -12817,8 +13170,10 @@
           "customer_id": {
             "type": "string",
             "description": "The unique identifier of the customer.",
-            "example": "cus_meowerunwiuwiwqw",
-            "nullable": true
+            "example": "cus_y3oqhf46pyzuxjbcn2giaqnb44",
+            "nullable": true,
+            "maxLength": 64,
+            "minLength": 1
           },
           "card_network": {
             "type": "string",
@@ -13122,7 +13477,8 @@
           "currency",
           "payment_methods",
           "mandate_payment",
-          "show_surcharge_breakup_screen"
+          "show_surcharge_breakup_screen",
+          "request_external_three_ds_authentication"
         ],
         "properties": {
           "redirect_url": {
@@ -13169,6 +13525,11 @@
               }
             ],
             "nullable": true
+          },
+          "request_external_three_ds_authentication": {
+            "type": "boolean",
+            "description": "flag to indicate whether to perform external 3ds authentication",
+            "example": true
           }
         }
       },
@@ -13190,8 +13551,10 @@
           "customer_id": {
             "type": "string",
             "description": "The unique identifier of the customer.",
-            "example": "cus_meowerunwiuwiwqw",
-            "nullable": true
+            "example": "cus_y3oqhf46pyzuxjbcn2giaqnb44",
+            "nullable": true,
+            "maxLength": 64,
+            "minLength": 1
           },
           "payment_method_id": {
             "type": "string",
@@ -13358,6 +13721,7 @@
           "trustly",
           "twint",
           "upi_collect",
+          "upi_intent",
           "vipps",
           "venmo",
           "walley",
@@ -13477,6 +13841,9 @@
       },
       "PaymentsCaptureRequest": {
         "type": "object",
+        "required": [
+          "amount_to_capture"
+        ],
         "properties": {
           "merchant_id": {
             "type": "string",
@@ -13487,7 +13854,7 @@
             "type": "integer",
             "format": "int64",
             "description": "The Amount to be captured/ debited from the user's payment method.",
-            "nullable": true
+            "example": 6540
           },
           "refund_uncaptured_amount": {
             "type": "boolean",
@@ -13511,6 +13878,26 @@
               }
             ],
             "nullable": true
+          }
+        }
+      },
+      "PaymentsCompleteAuthorizeRequest": {
+        "type": "object",
+        "required": [
+          "client_secret"
+        ],
+        "properties": {
+          "shipping": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Address"
+              }
+            ],
+            "nullable": true
+          },
+          "client_secret": {
+            "type": "string",
+            "description": "Client Secret"
           }
         }
       },
@@ -13624,38 +14011,11 @@
           },
           "customer_id": {
             "type": "string",
-            "description": "The identifier for the customer object. This field will be deprecated soon, use the customer object instead",
+            "description": "The identifier for the customer",
             "example": "cus_y3oqhf46pyzuxjbcn2giaqnb44",
             "nullable": true,
-            "maxLength": 255
-          },
-          "email": {
-            "type": "string",
-            "description": "The customer's email address This field will be deprecated soon, use the customer object instead",
-            "example": "johntest@test.com",
-            "nullable": true,
-            "maxLength": 255
-          },
-          "name": {
-            "type": "string",
-            "description": "The customer's name.\nThis field will be deprecated soon, use the customer object instead.",
-            "example": "John Test",
-            "nullable": true,
-            "maxLength": 255
-          },
-          "phone": {
-            "type": "string",
-            "description": "The customer's phone number\nThis field will be deprecated soon, use the customer object instead",
-            "example": "3141592653",
-            "nullable": true,
-            "maxLength": 255
-          },
-          "phone_country_code": {
-            "type": "string",
-            "description": "The country code for the customer phone number\nThis field will be deprecated soon, use the customer object instead",
-            "example": "+1",
-            "nullable": true,
-            "maxLength": 255
+            "maxLength": 64,
+            "minLength": 1
           },
           "off_session": {
             "type": "boolean",
@@ -13877,6 +14237,7 @@
             "minimum": 0
           },
           "frm_metadata": {
+            "type": "object",
             "description": "additional data related to some frm connectors",
             "nullable": true
           },
@@ -13890,6 +14251,14 @@
             "allOf": [
               {
                 "$ref": "#/components/schemas/RecurringDetails"
+              }
+            ],
+            "nullable": true
+          },
+          "charges": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PaymentChargeRequest"
               }
             ],
             "nullable": true
@@ -14003,38 +14372,11 @@
           },
           "customer_id": {
             "type": "string",
-            "description": "The identifier for the customer object. This field will be deprecated soon, use the customer object instead",
+            "description": "The identifier for the customer",
             "example": "cus_y3oqhf46pyzuxjbcn2giaqnb44",
             "nullable": true,
-            "maxLength": 255
-          },
-          "email": {
-            "type": "string",
-            "description": "The customer's email address This field will be deprecated soon, use the customer object instead",
-            "example": "johntest@test.com",
-            "nullable": true,
-            "maxLength": 255
-          },
-          "name": {
-            "type": "string",
-            "description": "The customer's name.\nThis field will be deprecated soon, use the customer object instead.",
-            "example": "John Test",
-            "nullable": true,
-            "maxLength": 255
-          },
-          "phone": {
-            "type": "string",
-            "description": "The customer's phone number\nThis field will be deprecated soon, use the customer object instead",
-            "example": "3141592653",
-            "nullable": true,
-            "maxLength": 255
-          },
-          "phone_country_code": {
-            "type": "string",
-            "description": "The country code for the customer phone number\nThis field will be deprecated soon, use the customer object instead",
-            "example": "+1",
-            "nullable": true,
-            "maxLength": 255
+            "maxLength": 64,
+            "minLength": 1
           },
           "off_session": {
             "type": "boolean",
@@ -14277,6 +14619,7 @@
             "minimum": 0
           },
           "frm_metadata": {
+            "type": "object",
             "description": "additional data related to some frm connectors",
             "nullable": true
           },
@@ -14290,6 +14633,14 @@
             "allOf": [
               {
                 "$ref": "#/components/schemas/RecurringDetails"
+              }
+            ],
+            "nullable": true
+          },
+          "charges": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PaymentChargeRequest"
               }
             ],
             "nullable": true
@@ -14327,7 +14678,8 @@
       "PaymentsExternalAuthenticationResponse": {
         "type": "object",
         "required": [
-          "trans_status"
+          "trans_status",
+          "three_ds_requestor_url"
         ],
         "properties": {
           "trans_status": {
@@ -14362,6 +14714,10 @@
             "type": "string",
             "description": "Contains the JWS object created by the ACS for the ARes message",
             "nullable": true
+          },
+          "three_ds_requestor_url": {
+            "type": "string",
+            "description": "Three DS Requestor URL"
           }
         }
       },
@@ -14494,14 +14850,16 @@
           },
           "customer_id": {
             "type": "string",
-            "description": "The identifier for the customer object. This field will be deprecated soon, use the customer object instead",
+            "description": "The identifier for the customer",
             "example": "cus_y3oqhf46pyzuxjbcn2giaqnb44",
             "nullable": true,
-            "maxLength": 255
+            "maxLength": 64,
+            "minLength": 1
           },
           "email": {
             "type": "string",
-            "description": "The customer's email address This field will be deprecated soon, use the customer object instead",
+            "description": "The customer's email address.\nThis field will be deprecated soon, use the customer object instead",
+            "deprecated": true,
             "example": "johntest@test.com",
             "nullable": true,
             "maxLength": 255
@@ -14509,6 +14867,7 @@
           "name": {
             "type": "string",
             "description": "The customer's name.\nThis field will be deprecated soon, use the customer object instead.",
+            "deprecated": true,
             "example": "John Test",
             "nullable": true,
             "maxLength": 255
@@ -14516,6 +14875,7 @@
           "phone": {
             "type": "string",
             "description": "The customer's phone number\nThis field will be deprecated soon, use the customer object instead",
+            "deprecated": true,
             "example": "3141592653",
             "nullable": true,
             "maxLength": 255
@@ -14523,6 +14883,7 @@
           "phone_country_code": {
             "type": "string",
             "description": "The country code for the customer phone number\nThis field will be deprecated soon, use the customer object instead",
+            "deprecated": true,
             "example": "+1",
             "nullable": true,
             "maxLength": 255
@@ -14779,6 +15140,7 @@
             "minimum": 0
           },
           "frm_metadata": {
+            "type": "object",
             "description": "additional data related to some frm connectors",
             "nullable": true
           },
@@ -14795,6 +15157,14 @@
               }
             ],
             "nullable": true
+          },
+          "charges": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PaymentChargeRequest"
+              }
+            ],
+            "nullable": true
           }
         },
         "additionalProperties": false
@@ -14805,6 +15175,8 @@
           "status",
           "amount",
           "net_amount",
+          "amount_capturable",
+          "amount_received",
           "currency",
           "payment_method",
           "attempt_count"
@@ -14837,29 +15209,26 @@
             "type": "integer",
             "format": "int64",
             "description": "The payment amount. Amount for the payment in lowest denomination of the currency. (i.e) in cents for USD denomination, in paisa for INR denomination etc.,",
-            "example": 100
+            "example": 6540
           },
           "net_amount": {
             "type": "integer",
             "format": "int64",
             "description": "The payment net amount. net_amount = amount + surcharge_details.surcharge_amount + surcharge_details.tax_amount,\nIf no surcharge_details, net_amount = amount",
-            "example": 110
+            "example": 6540
           },
           "amount_capturable": {
             "type": "integer",
             "format": "int64",
             "description": "The maximum amount that could be captured from the payment",
             "example": 6540,
-            "nullable": true,
             "minimum": 100
           },
           "amount_received": {
             "type": "integer",
             "format": "int64",
             "description": "The amount which is already captured from the payment",
-            "example": 6540,
-            "nullable": true,
-            "minimum": 100
+            "example": 6540
           },
           "connector": {
             "type": "string",
@@ -14885,15 +15254,17 @@
           },
           "customer_id": {
             "type": "string",
-            "description": "The identifier for the customer object. If not provided the customer ID will be autogenerated.",
+            "description": "The identifier for the customer object. If not provided the customer ID will be autogenerated.\nThis field will be deprecated soon. Please refer to `customer.id`",
+            "deprecated": true,
             "example": "cus_y3oqhf46pyzuxjbcn2giaqnb44",
             "nullable": true,
-            "maxLength": 255
+            "maxLength": 64,
+            "minLength": 1
           },
           "customer": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/CustomerDetails"
+                "$ref": "#/components/schemas/CustomerDetailsResponse"
               }
             ],
             "nullable": true
@@ -15024,21 +15395,24 @@
           },
           "email": {
             "type": "string",
-            "description": "description: The customer's email address",
+            "description": "description: The customer's email address\nThis field will be deprecated soon. Please refer to `customer.email` object",
+            "deprecated": true,
             "example": "johntest@test.com",
             "nullable": true,
             "maxLength": 255
           },
           "name": {
             "type": "string",
-            "description": "description: The customer's name",
+            "description": "description: The customer's name\nThis field will be deprecated soon. Please refer to `customer.name` object",
+            "deprecated": true,
             "example": "John Test",
             "nullable": true,
             "maxLength": 255
           },
           "phone": {
             "type": "string",
-            "description": "The customer's phone number",
+            "description": "The customer's phone number\nThis field will be deprecated soon. Please refer to `customer.phone` object",
+            "deprecated": true,
             "example": "3141592653",
             "nullable": true,
             "maxLength": 255
@@ -15316,6 +15690,19 @@
             "description": "Date time at which payment was updated",
             "example": "2022-09-10T10:11:12Z",
             "nullable": true
+          },
+          "charges": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PaymentChargeResponse"
+              }
+            ],
+            "nullable": true
+          },
+          "frm_metadata": {
+            "type": "object",
+            "description": "You can specify up to 50 keys, with key names up to 40 characters long and values up to 500 characters long. FRM Metadata is useful for storing additional, structured information on an object related to FRM.",
+            "nullable": true
           }
         }
       },
@@ -15563,38 +15950,11 @@
           },
           "customer_id": {
             "type": "string",
-            "description": "The identifier for the customer object. This field will be deprecated soon, use the customer object instead",
+            "description": "The identifier for the customer",
             "example": "cus_y3oqhf46pyzuxjbcn2giaqnb44",
             "nullable": true,
-            "maxLength": 255
-          },
-          "email": {
-            "type": "string",
-            "description": "The customer's email address This field will be deprecated soon, use the customer object instead",
-            "example": "johntest@test.com",
-            "nullable": true,
-            "maxLength": 255
-          },
-          "name": {
-            "type": "string",
-            "description": "The customer's name.\nThis field will be deprecated soon, use the customer object instead.",
-            "example": "John Test",
-            "nullable": true,
-            "maxLength": 255
-          },
-          "phone": {
-            "type": "string",
-            "description": "The customer's phone number\nThis field will be deprecated soon, use the customer object instead",
-            "example": "3141592653",
-            "nullable": true,
-            "maxLength": 255
-          },
-          "phone_country_code": {
-            "type": "string",
-            "description": "The country code for the customer phone number\nThis field will be deprecated soon, use the customer object instead",
-            "example": "+1",
-            "nullable": true,
-            "maxLength": 255
+            "maxLength": 64,
+            "minLength": 1
           },
           "off_session": {
             "type": "boolean",
@@ -15811,6 +16171,7 @@
             "minimum": 0
           },
           "frm_metadata": {
+            "type": "object",
             "description": "additional data related to some frm connectors",
             "nullable": true
           },
@@ -15824,6 +16185,14 @@
             "allOf": [
               {
                 "$ref": "#/components/schemas/RecurringDetails"
+              }
+            ],
+            "nullable": true
+          },
+          "charges": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PaymentChargeRequest"
               }
             ],
             "nullable": true
@@ -15931,10 +16300,11 @@
         "enum": [
           "adyen",
           "stripe",
-          "wise",
+          "payone",
           "paypal",
           "ebanx",
-          "cybersource"
+          "cybersource",
+          "wise"
         ]
       },
       "PayoutCreateRequest": {
@@ -15944,7 +16314,6 @@
           "currency",
           "confirm",
           "payout_type",
-          "customer_id",
           "auto_fulfill",
           "client_secret",
           "return_url",
@@ -16022,6 +16391,7 @@
             "type": "string",
             "description": "The identifier for the customer object. If not provided the customer ID will be autogenerated.",
             "example": "cus_y3oqhf46pyzuxjbcn2giaqnb44",
+            "nullable": true,
             "maxLength": 255
           },
           "auto_fulfill": {
@@ -16466,7 +16836,7 @@
             ],
             "properties": {
               "card": {
-                "$ref": "#/components/schemas/Card"
+                "$ref": "#/components/schemas/CardPayout"
               }
             }
           },
@@ -16633,12 +17003,21 @@
       "PaypalSessionTokenResponse": {
         "type": "object",
         "required": [
-          "session_token"
+          "connector",
+          "session_token",
+          "sdk_next_action"
         ],
         "properties": {
+          "connector": {
+            "type": "string",
+            "description": "Name of the connector"
+          },
           "session_token": {
             "type": "string",
             "description": "The session token for PayPal"
+          },
+          "sdk_next_action": {
+            "$ref": "#/components/schemas/SdkNextAction"
           }
         }
       },
@@ -17076,6 +17455,14 @@
               }
             ],
             "nullable": true
+          },
+          "charges": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ChargeRefunds"
+              }
+            ],
+            "nullable": true
           }
         },
         "additionalProperties": false
@@ -17102,7 +17489,9 @@
           "amount": {
             "type": "integer",
             "format": "int64",
-            "description": "The refund amount, which should be less than or equal to the total payment amount. Amount for the payment in lowest denomination of the currency. (i.e) in cents for USD denomination, in paisa for INR denomination etc"
+            "description": "The refund amount, which should be less than or equal to the total payment amount. Amount for the payment in lowest denomination of the currency. (i.e) in cents for USD denomination, in paisa for INR denomination etc",
+            "example": 6540,
+            "minimum": 100
           },
           "currency": {
             "type": "string",
@@ -17156,6 +17545,14 @@
           "merchant_connector_id": {
             "type": "string",
             "description": "The merchant_connector_id of the processor through which this payment went through",
+            "nullable": true
+          },
+          "charges": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ChargeRefunds"
+              }
+            ],
             "nullable": true
           }
         }
@@ -17274,11 +17671,15 @@
         "properties": {
           "surcharge_amount": {
             "type": "integer",
-            "format": "int64"
+            "format": "int64",
+            "example": 6540
           },
           "tax_amount": {
-            "type": "integer",
-            "format": "int64",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MinorUnit"
+              }
+            ],
             "nullable": true
           }
         }
@@ -17393,7 +17794,8 @@
           },
           "amount": {
             "type": "integer",
-            "format": "int64"
+            "format": "int64",
+            "example": 6540
           },
           "created_at": {
             "type": "string",
@@ -17862,6 +18264,17 @@
           }
         }
       },
+      "SdkNextActionData": {
+        "type": "object",
+        "required": [
+          "next_action"
+        ],
+        "properties": {
+          "next_action": {
+            "$ref": "#/components/schemas/NextActionCall"
+          }
+        }
+      },
       "SecretInfoToInitiateSdk": {
         "type": "object",
         "required": [
@@ -18173,6 +18586,13 @@
           "propertyName": "type"
         }
       },
+      "StripeChargeType": {
+        "type": "string",
+        "enum": [
+          "direct",
+          "destination"
+        ]
+      },
       "SurchargeDetailsResponse": {
         "type": "object",
         "required": [
@@ -18244,9 +18664,7 @@
                 ]
               },
               "value": {
-                "type": "integer",
-                "format": "int64",
-                "description": "Fixed Surcharge value"
+                "$ref": "#/components/schemas/MinorUnit"
               }
             }
           },
@@ -18317,6 +18735,16 @@
           },
           "poll_config": {
             "$ref": "#/components/schemas/PollConfigResponse"
+          },
+          "message_version": {
+            "type": "string",
+            "description": "Message Version",
+            "nullable": true
+          },
+          "directory_server_id": {
+            "type": "string",
+            "description": "Directory Server ID",
+            "nullable": true
           }
         }
       },
@@ -18470,7 +18898,7 @@
         },
         "additionalProperties": false
       },
-      "UpiData": {
+      "UpiCollectData": {
         "type": "object",
         "properties": {
           "vpa_id": {
@@ -18479,6 +18907,35 @@
             "nullable": true
           }
         }
+      },
+      "UpiData": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "upi_collect"
+            ],
+            "properties": {
+              "upi_collect": {
+                "$ref": "#/components/schemas/UpiCollectData"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "upi_intent"
+            ],
+            "properties": {
+              "upi_intent": {
+                "$ref": "#/components/schemas/UpiIntentData"
+              }
+            }
+          }
+        ]
+      },
+      "UpiIntentData": {
+        "type": "object"
       },
       "ValueType": {
         "oneOf": [

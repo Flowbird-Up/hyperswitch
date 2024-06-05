@@ -50,7 +50,6 @@ pub(crate) const BASE64_ENGINE_URL_SAFE: base64::engine::GeneralPurpose =
     base64::engine::general_purpose::URL_SAFE;
 
 pub(crate) const API_KEY_LENGTH: usize = 64;
-pub(crate) const PUB_SUB_CHANNEL: &str = "hyperswitch_invalidate";
 
 // Apple Pay validation url
 pub(crate) const APPLEPAY_VALIDATION_URL: &str =
@@ -118,6 +117,8 @@ pub const POLL_ID_TTL: i64 = 900;
 pub const DEFAULT_POLL_DELAY_IN_SECS: i8 = 2;
 pub const DEFAULT_POLL_FREQUENCY: i8 = 5;
 
+// Number of seconds to subtract from access token expiry
+pub(crate) const REDUCE_ACCESS_TOKEN_EXPIRY_TIME: u8 = 15;
 pub const CONNECTOR_CREDS_TOKEN_TTL: i64 = 900;
 
 //max_amount allowed is 999999999 in minor units

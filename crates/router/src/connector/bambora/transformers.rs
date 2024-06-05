@@ -26,7 +26,7 @@ impl<T> TryFrom<(&api::CurrencyUnit, enums::Currency, i64, T)> for BamboraRouter
     fn try_from(
         (currency_unit, currency, amount, item): (&api::CurrencyUnit, enums::Currency, i64, T),
     ) -> Result<Self, Self::Error> {
-        let amount = crate::connector::utils::get_amount_as_f64(currency_unit, amount, currency)?;
+        let amount = utils::get_amount_as_f64(currency_unit, amount, currency)?;
         Ok(Self {
             amount,
             router_data: item,
@@ -447,6 +447,7 @@ impl<F>
                     network_txn_id: None,
                     connector_response_reference_id: Some(pg_response.order_number.to_string()),
                     incremental_authorization_allowed: None,
+                    charge_id: None,
                 }),
                 ..item.data
             }),
@@ -473,6 +474,7 @@ impl<F>
                             item.data.connector_request_reference_id.to_string(),
                         ),
                         incremental_authorization_allowed: None,
+                        charge_id: None,
                     }),
                     ..item.data
                 })
@@ -522,6 +524,7 @@ impl<F>
                 network_txn_id: None,
                 connector_response_reference_id: Some(item.response.order_number.to_string()),
                 incremental_authorization_allowed: None,
+                charge_id: None,
             }),
             ..item.data
         })
@@ -574,6 +577,7 @@ impl<F>
                 network_txn_id: None,
                 connector_response_reference_id: Some(item.response.order_number.to_string()),
                 incremental_authorization_allowed: None,
+                charge_id: None,
             }),
             ..item.data
         })
@@ -615,6 +619,7 @@ impl<F>
                 network_txn_id: None,
                 connector_response_reference_id: Some(item.response.order_number.to_string()),
                 incremental_authorization_allowed: None,
+                charge_id: None,
             }),
             ..item.data
         })
@@ -656,6 +661,7 @@ impl<F>
                 network_txn_id: None,
                 connector_response_reference_id: Some(item.response.order_number.to_string()),
                 incremental_authorization_allowed: None,
+                charge_id: None,
             }),
             ..item.data
         })

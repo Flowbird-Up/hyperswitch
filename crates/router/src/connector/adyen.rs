@@ -214,7 +214,8 @@ impl ConnectorValidation for Adyen {
                 | PaymentMethodType::SamsungPay
                 | PaymentMethodType::Evoucher
                 | PaymentMethodType::Cashapp
-                | PaymentMethodType::UpiCollect => {
+                | PaymentMethodType::UpiCollect
+                | PaymentMethodType::UpiIntent => {
                     capture_method_not_supported!(connector, capture_method, payment_method_type)
                 }
             },
@@ -231,7 +232,7 @@ impl ConnectorValidation for Adyen {
     fn validate_mandate_payment(
         &self,
         pm_type: Option<PaymentMethodType>,
-        pm_data: types::domain::payments::PaymentMethodData,
+        pm_data: domain::payments::PaymentMethodData,
     ) -> CustomResult<(), errors::ConnectorError> {
         let mandate_supported_pmd = std::collections::HashSet::from([
             PaymentMethodDataType::Card,
@@ -366,7 +367,7 @@ impl
     ) -> CustomResult<RequestContent, errors::ConnectorError> {
         let authorize_req = types::PaymentsAuthorizeRouterData::foreign_from((
             req,
-            types::PaymentsAuthorizeData::from(req),
+            types::PaymentsAuthorizeData::foreign_from(req),
         ));
         let connector_router_data = adyen::AdyenRouterData::try_from((
             &self.get_currency_unit(),
