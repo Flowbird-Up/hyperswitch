@@ -2,17 +2,18 @@ use std::fmt::Debug;
 use error_stack::{report, ResultExt};
 use http::StatusCode;
 use serde::Deserialize;
+use common_utils::ext_traits::ValueExt;
 use common_utils::pii::SecretSerdeValue;
 use diesel_models::enums;
 use masking::ExposeInterface;
 use transformers as archipel;
-
 use crate::{
     configs::settings,
     core::errors::{self, CustomResult},
     events::connector_api_logs::ConnectorEvent,
     headers,
-    services::{self, ConnectorIntegration, ConnectorValidation, request::{self, Mask}}, types::{
+    services::{self, ConnectorIntegration, ConnectorValidation, request::{self}},
+    types::{
         self,
         api::{self, ConnectorCommon, ConnectorCommonExt},
         ErrorResponse, RequestContent,
@@ -111,7 +112,6 @@ impl ConnectorCommon for Archipel {
 }
 
 impl ConnectorValidation for Archipel {
-    //TODO: implement functions when support enabled
     // Allowed Capture methods for archipel connector
     fn validate_capture_method(&self,
                                capture_method: Option<enums::CaptureMethod>,
@@ -235,6 +235,7 @@ impl ConnectorIntegration<api::Authorize,
     fn get_error_response(&self,
                           res: Response,
                           event_builder: Option<&mut ConnectorEvent>) -> CustomResult<ErrorResponse,errors::ConnectorError> {
+        router_env::logger::debug!(connector_error_response=?event_builder);
         self.build_error_response(res, event_builder)
     }
 
