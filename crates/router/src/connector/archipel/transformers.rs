@@ -1,4 +1,4 @@
-use error_stack::{report, ResultExt};
+use error_stack::{report};
 use serde::{Deserialize, Serialize};
 use api_models::payments::AddressDetails;
 use common_utils::ext_traits::Encode;
@@ -235,6 +235,11 @@ impl TryFrom<&ArchipelRouterData<&types::PaymentsAuthorizeRouterData>> for Archi
         };
         let billing_details = item.router_data.get_billing()?.clone().address.clone().or(None);
 
+        let card_holder_name = billing_details.clone()
+            .ok_or(errors::ConnectorError::MissingRequiredField {field_name: "billing.address"})
+            .unwrap()
+            .get_optional_full_name();
+
         let payment_information = match item.router_data.request.payment_method_data.clone() {
             domain::PaymentMethodData::Card(ccard) => {
                 ArchipelPaymentInformation::CardPayment (
@@ -248,10 +253,7 @@ impl TryFrom<&ArchipelRouterData<&types::PaymentsAuthorizeRouterData>> for Archi
                            security_code: ccard.card_cvc.clone(),
                            // TODO: Set with default value. Not yet implemented on HP
                            application_selection_indicator: ApplicationSelectionIndicator::ByDefault,
-                           card_holder_name: match !billing_details.is_none() {
-                               true => billing_details.clone().unwrap().get_optional_full_name(),
-                               false => None
-                           },
+                           card_holder_name,
                            // TODO: Check mapping scheme card Hs/Archipel
                            scheme: Some(ccard.card_issuer.or(Some("VISA".to_string())).clone().unwrap().to_uppercase())
                        },

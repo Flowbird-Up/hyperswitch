@@ -2,7 +2,6 @@ use std::fmt::Debug;
 use error_stack::{report, ResultExt};
 use http::StatusCode;
 use serde::Deserialize;
-use common_utils::ext_traits::ValueExt;
 use common_utils::pii::SecretSerdeValue;
 use diesel_models::enums;
 use masking::ExposeInterface;
@@ -20,7 +19,7 @@ use crate::{
         Response
     },
     utils::{BytesExt},
-    connector::utils::RouterData, consts};
+    connector::utils::RouterData};
 
 pub mod transformers;
 
