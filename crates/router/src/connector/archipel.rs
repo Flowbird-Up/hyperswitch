@@ -1,23 +1,25 @@
 use std::fmt::Debug;
-
-use error_stack::{IntoReport, ResultExt};
-
+use error_stack::{report, ResultExt};
+use http::StatusCode;
+use serde::Deserialize;
+use common_utils::pii::SecretSerdeValue;
+use diesel_models::enums;
 use masking::ExposeInterface;
 use transformers as archipel;
-
 use crate::{
     configs::settings,
     core::errors::{self, CustomResult},
     events::connector_api_logs::ConnectorEvent,
     headers,
-    services::{self, ConnectorIntegration, ConnectorValidation, request::{self, Mask}}, types::{
+    services::{self, ConnectorIntegration, ConnectorValidation, request::{self}},
+    types::{
         self,
         api::{self, ConnectorCommon, ConnectorCommonExt},
         ErrorResponse, RequestContent,
         Response
     },
-    utils::{self, BytesExt}
-};
+    utils::{BytesExt},
+    connector::utils::RouterData};
 
 pub mod transformers;
 
@@ -38,16 +40,6 @@ impl api::RefundSync for Archipel {}
 impl api::PaymentToken for Archipel {}
 impl api::PayoutRecipientAccount for Archipel {}
 
-
-impl
-ConnectorIntegration<
-    api::PaymentMethodToken,
-    types::PaymentMethodTokenizationData,
-    types::PaymentsResponseData,
-> for Archipel
-{
-    // Not Implemented (R)
-}
 
 impl<Flow, Request, Response> ConnectorCommonExt<Flow, Request, Response> for Archipel
     where
@@ -79,10 +71,8 @@ impl ConnectorCommon for Archipel {
         api::CurrencyUnit::Base
     }
 
-    fn get_auth_header(&self, auth_type:&types::ConnectorAuthType)-> CustomResult<Vec<(String,request::Maskable<String>)>,errors::ConnectorError> {
-        let auth =  archipel::ArchipelAuthType::try_from(auth_type)
-            .change_context(errors::ConnectorError::FailedToObtainAuthType)?;
-        Ok(vec![(headers::AUTHORIZATION.to_string(), auth.api_key.expose().into_masked())])
+    fn get_auth_header(&self, _auth_type:&types::ConnectorAuthType)-> CustomResult<Vec<(String,request::Maskable<String>)>,errors::ConnectorError> {
+        Ok(vec![])
     }
 
     fn common_get_content_type(&self) -> &'static str {
@@ -98,61 +88,70 @@ impl ConnectorCommon for Archipel {
         res: Response,
         event_builder: Option<&mut ConnectorEvent>,
     ) -> CustomResult<ErrorResponse, errors::ConnectorError> {
-        let response: archipel::ArchipelErrorResponse = res
-            .response
-            .parse_struct("ArchipelErrorResponse")
-            .change_context(errors::ConnectorError::ResponseDeserializationFailed)?;
+        let response: archipel::ArchipelErrorResponse =
+            archipel::ArchipelErrorResponse {
+                status_code: res.status_code,
+                code: String::new(),
+                message: serde_json::from_slice(&res.response).unwrap_or("").to_string(),
+                reason: Some(StatusCode::from_u16(res.status_code).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR).to_string())
+            };
 
-        event_builder.map(|i| i.set_response_body(&response));
+        event_builder.map(|i| i.set_response_body(&response.message));
         router_env::logger::info!(connector_response=?response);
 
         Ok(ErrorResponse {
-            status_code: res.status_code,
+            status_code: response.status_code,
             code: response.code,
             message: response.message,
             reason: response.reason,
-            attempt_status: None,
+            attempt_status: Some(enums::AttemptStatus::Failure),
             connector_transaction_id: None,
         })
     }
 }
 
-impl ConnectorValidation for Archipel
-{
-    //TODO: implement functions when support enabled
+impl ConnectorValidation for Archipel {
+    // Allowed Capture methods for archipel connector
+    fn validate_capture_method(&self,
+                               capture_method: Option<enums::CaptureMethod>,
+                               _pmt: Option<enums::PaymentMethodType>) -> CustomResult<(), errors::ConnectorError> {
+        let capture_method = capture_method.unwrap_or_default();
+        match capture_method {
+            enums::CaptureMethod::Automatic => Ok(()),
+            enums::CaptureMethod::Manual
+            | enums::CaptureMethod::ManualMultiple
+            | enums::CaptureMethod::Scheduled => {
+                Err(errors::ConnectorError::NotSupported {
+                    message: capture_method.to_string(),
+                    connector: self.id(),
+                }
+                    .into())
+            }
+        }
+    }
 }
 
-impl
-ConnectorIntegration<
-    api::Session,
-    types::PaymentsSessionData,
-    types::PaymentsResponseData,
-> for Archipel
-{
-    //TODO: implement sessions flow
+#[derive(Debug, Deserialize)]
+struct ConnectorMetadata {
+    tenant_id: String
 }
 
-impl ConnectorIntegration<api::AccessTokenAuth, types::AccessTokenRequestData, types::AccessToken>
-for Archipel
-{
+fn get_tenant_id(connector_metadata: SecretSerdeValue) -> String {
+    let unwrap_data: ConnectorMetadata = serde_json::from_value(connector_metadata.expose()).unwrap_or(
+        ConnectorMetadata {
+            tenant_id: "0".to_string()
+        });
+    // TODO: remove debug log
+    router_env::debug!(get_tenant_id=format!("{:?}", unwrap_data));
+    unwrap_data.tenant_id
 }
 
-impl
-ConnectorIntegration<
-    api::SetupMandate,
-    types::SetupMandateRequestData,
-    types::PaymentsResponseData,
-> for Archipel
-{
-}
-
-impl
-ConnectorIntegration<
-    api::Authorize,
+impl ConnectorIntegration<api::Authorize,
     types::PaymentsAuthorizeData,
-    types::PaymentsResponseData,
-> for Archipel {
-    fn get_headers(&self, req: &types::PaymentsAuthorizeRouterData, connectors: &settings::Connectors,) -> CustomResult<Vec<(String, request::Maskable<String>)>,errors::ConnectorError> {
+    types::PaymentsResponseData, > for Archipel {
+    fn get_headers(&self,
+                   req: &types::PaymentsAuthorizeRouterData,
+                   connectors: &settings::Connectors,) -> CustomResult<Vec<(String, request::Maskable<String>)>,errors::ConnectorError> {
         self.build_headers(req, connectors)
     }
 
@@ -160,30 +159,43 @@ ConnectorIntegration<
         self.common_get_content_type()
     }
 
-    fn get_url(
-        &self,
-        _req: &types::PaymentsAuthorizeRouterData,
-        connectors: &settings::Connectors,
-    ) -> CustomResult<String, errors::ConnectorError> {
-        Ok(format!("{}{}", self.base_url(connectors), "v1/payments/authorize"))
+    fn get_url(&self,
+               _req: &types::PaymentsAuthorizeRouterData,
+               connectors: &settings::Connectors, ) -> CustomResult<String, errors::ConnectorError> {
+        let capture_method = _req.request.capture_method.ok_or(errors::ConnectorError::CaptureMethodNotSupported)?;
+        match capture_method {
+            enums::CaptureMethod::Automatic => {
+                Ok(format!("{}{}", self.base_url(connectors), "Transaction/v1/pay"))
+            },
+            enums::CaptureMethod::Manual => {
+                Ok(format!("{}{}", self.base_url(connectors), "Transaction/v1/authorize"))
+            }
+            enums::CaptureMethod::ManualMultiple
+            |enums::CaptureMethod::Scheduled => {
+                Err(report!(errors::ConnectorError::CaptureMethodNotSupported))
+            }
+        }
     }
 
-    fn get_request_body(&self, req: &types::PaymentsAuthorizeRouterData, _connectors: &settings::Connectors,) -> CustomResult<RequestContent, errors::ConnectorError> {
+    fn get_request_body(&self,
+                        req: &types::PaymentsAuthorizeRouterData,
+                        _connectors: &settings::Connectors,) -> CustomResult<RequestContent, errors::ConnectorError> {
+        let tenant = get_tenant_id(req.get_connector_meta().unwrap());
         let connector_router_data =
             archipel::ArchipelRouterData::try_from((
                 &self.get_currency_unit(),
                 req.request.currency,
                 req.request.amount,
                 req,
+                tenant
             ))?;
-        let connector_req = archipel::ArchipelPaymentsRequest::try_from(&connector_router_data)?;
+        let connector_req = archipel::ArchipelAuthorizationRequest::try_from(&connector_router_data)?;
         Ok(RequestContent::Json(Box::new(connector_req)))
     }
 
-    fn build_request(
-        &self,
-        req: &types::PaymentsAuthorizeRouterData,
-        connectors: &settings::Connectors,
+    fn build_request(&self,
+                     req: &types::PaymentsAuthorizeRouterData,
+                     connectors: &settings::Connectors,
     ) -> CustomResult<Option<services::Request>, errors::ConnectorError> {
         Ok(Some(
             services::RequestBuilder::new()
@@ -206,7 +218,10 @@ ConnectorIntegration<
         event_builder: Option<&mut ConnectorEvent>,
         res: Response,
     ) -> CustomResult<types::PaymentsAuthorizeRouterData,errors::ConnectorError> {
-        let response: archipel::ArchipelPaymentsResponse = res.response.parse_struct("Archipel PaymentsAuthorizeResponse").change_context(errors::ConnectorError::ResponseDeserializationFailed)?;
+        let response: archipel::ArchipelPaymentsResponse = res
+            .response
+            .parse_struct("PaymentsAuthorizeResponse")
+            .change_context(errors::ConnectorError::ResponseDeserializationFailed)?;
         event_builder.map(|i| i.set_response_body(&response));
         router_env::logger::info!(connector_response=?response);
         types::RouterData::try_from(types::ResponseRouterData {
@@ -216,15 +231,36 @@ ConnectorIntegration<
         })
     }
 
-    fn get_error_response(&self, res: Response, event_builder: Option<&mut ConnectorEvent>) -> CustomResult<ErrorResponse,errors::ConnectorError> {
+    fn get_error_response(&self,
+                          res: Response,
+                          event_builder: Option<&mut ConnectorEvent>) -> CustomResult<ErrorResponse,errors::ConnectorError> {
+        router_env::logger::debug!(connector_error_response=?event_builder);
         self.build_error_response(res, event_builder)
+    }
+
+    fn get_5xx_error_response(&self, res: Response, event_builder: Option<&mut ConnectorEvent>) -> CustomResult<ErrorResponse, errors::ConnectorError> {
+        let response: archipel::ArchipelErrorMessage = res
+            .response
+            .parse_struct("ArchipelErrorMessage")
+            .change_context(errors::ConnectorError::ResponseDeserializationFailed)?;
+
+        event_builder.map(|i| i.set_response_body(&serde_json::from_slice(&res.response).unwrap_or("").to_string()));
+        router_env::logger::info!(connector_response=?response);
+
+        Ok(ErrorResponse {
+            status_code: res.status_code,
+            code: response.code,
+            message: String::new(),
+            reason: response.description,
+            attempt_status: Some(enums::AttemptStatus::Failure),
+            connector_transaction_id: None,
+        })
     }
 }
 
-impl
-ConnectorIntegration<api::PSync, types::PaymentsSyncData, types::PaymentsResponseData>
-for Archipel
-{
+impl ConnectorIntegration<api::PSync,
+    types::PaymentsSyncData,
+    types::PaymentsResponseData> for Archipel {
     fn get_headers(
         &self,
         req: &types::PaymentsSyncRouterData,
@@ -288,13 +324,9 @@ for Archipel
     }
 }
 
-impl
-ConnectorIntegration<
-    api::Capture,
+impl ConnectorIntegration<api::Capture,
     types::PaymentsCaptureData,
-    types::PaymentsResponseData,
-> for Archipel
-{
+    types::PaymentsResponseData, > for Archipel {
     fn get_headers(
         &self,
         req: &types::PaymentsCaptureRouterData,
@@ -369,20 +401,9 @@ ConnectorIntegration<
     }
 }
 
-impl
-ConnectorIntegration<
-    api::Void,
-    types::PaymentsCancelData,
-    types::PaymentsResponseData,
-> for Archipel
-{}
-
-impl
-ConnectorIntegration<
-    api::Execute,
+impl ConnectorIntegration<api::Execute,
     types::RefundsData,
-    types::RefundsResponseData,
-> for Archipel {
+    types::RefundsResponseData, > for Archipel {
     fn get_headers(&self, req: &types::RefundsRouterData<api::Execute>, connectors: &settings::Connectors,) -> CustomResult<Vec<(String,request::Maskable<String>)>,errors::ConnectorError> {
         self.build_headers(req, connectors)
     }
@@ -396,12 +417,14 @@ ConnectorIntegration<
     }
 
     fn get_request_body(&self, req: &types::RefundsRouterData<api::Execute>, _connectors: &settings::Connectors,) -> CustomResult<RequestContent, errors::ConnectorError> {
+        let tenant = get_tenant_id(req.get_connector_meta().unwrap());
         let connector_router_data =
             archipel::ArchipelRouterData::try_from((
                 &self.get_currency_unit(),
                 req.request.currency,
                 req.request.refund_amount,
                 req,
+                tenant
             ))?;
         let connector_req = archipel::ArchipelRefundRequest::try_from(&connector_router_data)?;
         Ok(RequestContent::Json(Box::new(connector_req)))
@@ -439,9 +462,9 @@ ConnectorIntegration<
     }
 }
 
-
-impl
-ConnectorIntegration<api::RSync, types::RefundsData, types::RefundsResponseData> for Archipel {
+impl ConnectorIntegration<api::RSync,
+    types::RefundsData,
+    types::RefundsResponseData> for Archipel {
     fn get_headers(&self, req: &types::RefundSyncRouterData,connectors: &settings::Connectors,) -> CustomResult<Vec<(String, request::Maskable<String>)>,errors::ConnectorError> {
         self.build_headers(req, connectors)
     }
@@ -491,11 +514,36 @@ ConnectorIntegration<api::RSync, types::RefundsData, types::RefundsResponseData>
     }
 }
 
-impl ConnectorIntegration<
-    api::PoRecipientAccount,
+impl ConnectorIntegration<api::PaymentMethodToken,
+    types::PaymentMethodTokenizationData,
+    types::PaymentsResponseData, > for Archipel {
+    // Not Implemented (R)
+}
+
+impl ConnectorIntegration<api::Session,
+    types::PaymentsSessionData,
+    types::PaymentsResponseData, > for Archipel {
+    //TODO: implement sessions flow
+}
+
+impl ConnectorIntegration<api::AccessTokenAuth,
+    types::AccessTokenRequestData,
+    types::AccessToken> for Archipel {
+}
+
+impl ConnectorIntegration<api::SetupMandate,
+    types::SetupMandateRequestData,
+    types::PaymentsResponseData, > for Archipel {
+}
+
+
+impl ConnectorIntegration<api::Void,
+    types::PaymentsCancelData,
+    types::PaymentsResponseData, > for Archipel {}
+
+impl ConnectorIntegration<api::PoRecipientAccount,
     types::PayoutsData,
-    types::PayoutsResponseData> for Archipel
-{
+    types::PayoutsResponseData> for Archipel {
     //TODO: implement PayoutRecipientAccount flow
 }
 
@@ -505,20 +553,18 @@ impl api::IncomingWebhook for Archipel {
         &self,
         _request: &api::IncomingWebhookRequestDetails<'_>,
     ) -> CustomResult<api::webhooks::ObjectReferenceId, errors::ConnectorError> {
-        Err(errors::ConnectorError::WebhooksNotImplemented).into_report()
+        Err(report!(errors::ConnectorError::WebhooksNotImplemented))
     }
 
     fn get_webhook_event_type(
         &self,
         _request: &api::IncomingWebhookRequestDetails<'_>,
     ) -> CustomResult<api::IncomingWebhookEvent, errors::ConnectorError> {
-        Err(errors::ConnectorError::WebhooksNotImplemented).into_report()
+        Err(report!(errors::ConnectorError::WebhooksNotImplemented))
     }
 
-    fn get_webhook_resource_object(
-        &self,
-        _request: &api::IncomingWebhookRequestDetails<'_>,
+    fn get_webhook_resource_object(&self, _request: &api::IncomingWebhookRequestDetails<'_>,
     ) -> CustomResult<Box<dyn masking::ErasedMaskSerialize>, errors::ConnectorError> {
-        Err(errors::ConnectorError::WebhooksNotImplemented).into_report()
+        Err(report!(errors::ConnectorError::WebhooksNotImplemented))
     }
 }

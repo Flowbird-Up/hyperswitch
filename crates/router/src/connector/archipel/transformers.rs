@@ -1,138 +1,558 @@
+use error_stack::{report};
 use serde::{Deserialize, Serialize};
-use masking::Secret;
-use crate::{connector::utils::{PaymentsAuthorizeRequestData},core::errors,types::{self,api, storage::enums}};
+use api_models::payments::AddressDetails;
+use common_utils::ext_traits::Encode;
+use masking::{Secret};
+use crate::{core::errors, types::{self, api, storage::enums}};
+use crate::connector::utils;
+use crate::connector::utils::{AddressDetailsData, CardData, RouterData};
 use crate::types::domain;
 
 //TODO: Fill the struct with respective fields
 pub struct ArchipelRouterData<T> {
     pub amount: i64, // The type of amount that a connector accepts, for example, String, i64, f64, etc.
     pub router_data: T,
+    pub tenant_id: String,
 }
 
-impl<T>
-TryFrom<(
-    &types::api::CurrencyUnit,
-    types::storage::enums::Currency,
-    i64,
-    T,
-)> for ArchipelRouterData<T>
-{
+impl<T> TryFrom<(&api::CurrencyUnit, enums::Currency, i64, T, String)> for ArchipelRouterData<T> {
     type Error = error_stack::Report<errors::ConnectorError>;
-    fn try_from(
-        (_currency_unit, _currency, amount, item): (
-            &types::api::CurrencyUnit,
-            types::storage::enums::Currency,
-            i64,
-            T,
-        ),
-    ) -> Result<Self, Self::Error> {
+    fn try_from((_currency_unit, _currency, amount, item, tenant):
+                (&api::CurrencyUnit, enums::Currency, i64, T, String), ) -> Result<Self, Self::Error> {
         //Todo :  use utils to convert the amount to the type of amount that a connector accepts
         Ok(Self {
             amount,
             router_data: item,
+            tenant_id: tenant
         })
     }
 }
 
 //TODO: Fill the struct with respective fields
-#[derive(Default, Debug, Serialize, Eq, PartialEq)]
-pub struct ArchipelPaymentsRequest {
-    amount: i64,
-    card: ArchipelCard
-}
-
-#[derive(Default, Debug, Serialize, Eq, PartialEq)]
-pub struct ArchipelCard {
-    number: cards::CardNumber,
-    expiry_month: Secret<String>,
-    expiry_year: Secret<String>,
-    cvc: Secret<String>,
-    complete: bool,
-}
-
-impl TryFrom<&ArchipelRouterData<&types::PaymentsAuthorizeRouterData>> for ArchipelPaymentsRequest  {
-    type Error = error_stack::Report<errors::ConnectorError>;
-    fn try_from(item: &ArchipelRouterData<&types::PaymentsAuthorizeRouterData>) -> Result<Self,Self::Error> {
-        match item.router_data.request.payment_method_data.clone() {
-            domain::PaymentMethodData::Card(req_card) => {
-                let card = ArchipelCard {
-                    number: req_card.card_number,
-                    expiry_month: req_card.card_exp_month,
-                    expiry_year: req_card.card_exp_year,
-                    cvc: req_card.card_cvc,
-                    complete: item.router_data.request.is_auto_capture()?,
-                };
-                Ok(Self {
-                    amount: item.amount.to_owned(),
-                    card,
-                })
-            }
-            _ => Err(errors::ConnectorError::NotImplemented("Payment methods".to_string()).into()),
-        }
-    }
-}
-
-//TODO: Fill the struct with respective fields
 // Auth Struct
-pub struct ArchipelAuthType {
-    pub(super) api_key: Secret<String>,
-}
+pub struct ArchipelAuthType {}
 
 impl TryFrom<&types::ConnectorAuthType> for ArchipelAuthType  {
     type Error = error_stack::Report<errors::ConnectorError>;
     fn try_from(auth_type: &types::ConnectorAuthType) -> Result<Self, Self::Error> {
         match auth_type {
-            types::ConnectorAuthType::HeaderKey { api_key } => Ok(Self {
-                api_key: api_key.to_owned(),
-            }),
+            types::ConnectorAuthType::NoKey => Ok(Self {}),
             _ => Err(errors::ConnectorError::FailedToObtainAuthType.into()),
         }
     }
 }
-// PaymentsResponse
-//TODO: Append the remaining status flags
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "lowercase")]
-pub enum ArchipelPaymentStatus {
-    Succeeded,
-    Failed,
-    #[default]
-    Processing,
+
+#[derive(Debug, Serialize, Deserialize, Eq, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ArchipelTransactionMetadata {
+    pub transaction_id: Option<String>,
+    pub transaction_date: Option<String>,
+    pub financial_network_code: Option<String>,
+    pub issuer_transaction_id: Option<String>,
+    pub response_code: Option<String>,
+    pub authorization_code: Option<String>,
+    pub payment_account_reference: Option<String>,
 }
 
-impl From<ArchipelPaymentStatus> for enums::AttemptStatus {
-    fn from(item: ArchipelPaymentStatus) -> Self {
-        match item {
-            ArchipelPaymentStatus::Succeeded => Self::Charged,
-            ArchipelPaymentStatus::Failed => Self::Failure,
-            ArchipelPaymentStatus::Processing => Self::Authorizing,
-        }
+#[derive(Debug, Serialize, Eq, PartialEq)]
+#[serde(untagged)]
+pub enum ArchipelPaymentInformation {
+    CardPayment (CardPaymentInformation),
+    WalletPayment (WalletPaymentInformation),
+}
+
+#[derive(Debug, Serialize, Eq, PartialEq)]
+pub struct CardPaymentInformation {
+    card: ArchipelCard,
+    wallet: Option<ArchipelWallet>,
+    three_ds: Option<Archipel3DS>
+}
+
+#[derive(Debug, Serialize, Eq, PartialEq)]
+pub struct WalletPaymentInformation {
+    card: Option<ArchipelCard>,
+    wallet: ArchipelWallet,
+    three_ds: Archipel3DS
+}
+
+#[derive(Debug, Default, Serialize, Eq, PartialEq)]
+#[serde(rename_all = "UPPERCASE")]
+pub enum ArchipelPaymentInitiator {
+    #[default]
+    Customer,
+    Merchant,
+}
+
+#[derive(Debug, Serialize, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ArchipelOrderRequest {
+    amount: i64,
+    currency: String,
+    initiator: ArchipelPaymentInitiator,
+}
+
+#[derive(Debug, Serialize, Eq, PartialEq)]
+pub struct CardExpiryDate {
+    month: Secret<String>,
+    year: Secret<String>,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Serialize, Default, Eq, PartialEq)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum ApplicationSelectionIndicator {
+    #[default]
+    ByDefault,
+    CustomerChoice,
+}
+
+#[derive(Debug, Serialize, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ArchipelCard {
+    number: cards::CardNumber,
+    expiry: CardExpiryDate,
+    security_code: Secret<String>,
+    card_holder_name: Option<Secret<String>>,
+    application_selection_indicator: ApplicationSelectionIndicator,
+    scheme: Option<String>,
+}
+
+#[derive(Debug, Serialize, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ArchipelWallet {
+    wallet_indicator: Secret<String>,
+    wallet_provider: Secret<String>,
+    wallet_cryptogram: Secret<String>,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Serialize, Eq, PartialEq)]
+pub enum ThreeDsAuthStatus {
+    Y,
+    N,
+    U,
+    C,
+    R,
+    A,
+    D,
+    I,
+}
+
+#[derive(Debug, Serialize, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Archipel3DS {
+    #[serde(rename="acsTransID")]
+    acs_trans_id: Option<Secret<String>>,
+    #[serde(rename="dsTransID")]
+    ds_trans_id: Option<Secret<String>>,
+    #[serde(rename="3DSRequestorName")]
+    three_ds_requestor_name: Option<Secret<String>>,
+    #[serde(rename="3DSAuthDate")]
+    three_ds_auth_date: Option<String>,
+    #[serde(rename="3DSAuthAmt")]
+    three_ds_auth_amt: Option<u32>,
+    #[serde(rename="3DSAuthStatus")]
+    three_ds_auth_status: Option<ThreeDsAuthStatus>,
+    #[serde(rename="3DSMaxSupportedVersion")]
+    three_ds_max_supported_version: Option<String>,
+    #[serde(rename="3DSVersion")]
+    three_ds_version: Option<String>,
+    authentication_value: Option<Secret<String>>,
+    authentication_method: Option<Secret<String>>,
+    eci: Option<Secret<String>>,
+}
+
+#[derive(Debug, Serialize, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ArchipelCardHolder {
+    billing_address: Option<ArchipelBillingAddress>,
+}
+
+impl TryFrom<Option<ArchipelBillingAddress>> for ArchipelCardHolder {
+    type Error = ();
+    fn try_from(value: Option<ArchipelBillingAddress>) -> Result<Self, Self::Error> {
+        Ok(Self {
+            billing_address: value
+        })
     }
 }
 
-//TODO: Fill the struct with respective fields
-#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct ArchipelPaymentsResponse {
-    status: ArchipelPaymentStatus,
-    id: String,
+#[derive(Debug, Serialize, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ArchipelBillingAddress {
+    address: Option<Secret<String>>,
+    postal_code: Option<Secret<String>>,
 }
 
-impl<F,T> TryFrom<types::ResponseRouterData<F, ArchipelPaymentsResponse, T, types::PaymentsResponseData>> for types::RouterData<F, T, types::PaymentsResponseData> {
-    type Error = error_stack::Report<errors::ConnectorError>;
-    fn try_from(item: types::ResponseRouterData<F, ArchipelPaymentsResponse, T, types::PaymentsResponseData>) -> Result<Self,Self::Error> {
+impl TryFrom<Option<AddressDetails>> for ArchipelBillingAddress {
+    type Error = ();
+    fn try_from(_address_details: Option<AddressDetails>) -> Result<Self, Self::Error> {
+        let details = _address_details.unwrap();
         Ok(Self {
-            status: enums::AttemptStatus::from(item.response.status),
+            address: details.get_combined_address_line().ok(),
+            postal_code: details.zip,
+        })
+    }
+}
+
+#[derive(Debug, Serialize, Eq, PartialEq)]
+#[serde(rename_all = "UPPERCASE")]
+pub enum ArchipelCredentialIndicatorStatus {
+    Initial,
+    Subsequent
+}
+
+#[derive(Debug, Serialize, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ArchipelCredentialIndicator {
+    status: ArchipelCredentialIndicatorStatus,
+    recurring: Option<bool>,
+    transaction_id: Option<String>,
+}
+
+#[derive(Debug, Serialize, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ArchipelAuthorizationRequest {
+    order: ArchipelOrderRequest,
+    card: Option<ArchipelCard>,
+    cardholder: Option<ArchipelCardHolder>,
+    wallet: Option<ArchipelWallet>,
+    #[serde(rename="3DS")]
+    three_ds: Option<Archipel3DS>,
+    credential_indicator: Option<ArchipelCredentialIndicator>,
+    stored_on_file: bool,
+    tenant_id: String,
+    token_id: Option<String>,
+}
+
+impl TryFrom<&ArchipelRouterData<&types::PaymentsAuthorizeRouterData>> for ArchipelAuthorizationRequest  {
+    type Error = error_stack::Report<errors::ConnectorError>;
+    fn try_from(item: &ArchipelRouterData<&types::PaymentsAuthorizeRouterData>) -> Result<Self,Self::Error> {
+        let order = ArchipelOrderRequest {
+            amount: item.amount.to_owned(),
+            currency: item.router_data.request.currency.to_string(),
+            initiator: ArchipelPaymentInitiator::Customer
+        };
+        let billing_details = item.router_data.get_billing()?.clone().address.clone().or(None);
+
+        let card_holder_name = billing_details.clone()
+            .ok_or(errors::ConnectorError::MissingRequiredField {field_name: "billing.address"})
+            .unwrap()
+            .get_optional_full_name();
+
+        let payment_information = match item.router_data.request.payment_method_data.clone() {
+            domain::PaymentMethodData::Card(ccard) => {
+                ArchipelPaymentInformation::CardPayment (
+                    CardPaymentInformation {
+                       card: ArchipelCard {
+                           number: ccard.card_number.clone(),
+                           expiry: CardExpiryDate {
+                               month: ccard.card_exp_month.clone(),
+                               year: ccard.get_card_expiry_year_2_digit().unwrap().clone(),
+                           },
+                           security_code: ccard.card_cvc.clone(),
+                           // TODO: Set with default value. Not yet implemented on HP
+                           application_selection_indicator: ApplicationSelectionIndicator::ByDefault,
+                           card_holder_name,
+                           // TODO: Check mapping scheme card Hs/Archipel
+                           scheme: Some(ccard.card_issuer.or(Some("VISA".to_string())).clone().unwrap().to_uppercase())
+                       },
+                       wallet: None,
+                       three_ds: None,
+                   }
+                )
+            }
+            // TODO: Implement wallet
+            | domain::PaymentMethodData::Wallet(_)
+            | domain::PaymentMethodData::CardRedirect(_)
+            | domain::PaymentMethodData::PayLater(_)
+            | domain::PaymentMethodData::BankRedirect(_)
+            | domain::PaymentMethodData::BankDebit(_)
+            | domain::PaymentMethodData::BankTransfer(_)
+            | domain::PaymentMethodData::Crypto(_)
+            | domain::PaymentMethodData::MandatePayment
+            | domain::PaymentMethodData::Reward
+            | domain::PaymentMethodData::Upi(_)
+            | domain::PaymentMethodData::Voucher(_)
+            | domain::PaymentMethodData::GiftCard(_)
+            | domain::PaymentMethodData::CardToken(_) => {
+               Err(errors::ConnectorError::NotImplemented(
+                   utils::get_unimplemented_payment_method_error_message("Archipel"),
+               ))?
+            }
+        };
+
+        let (card, wallet, three_ds): (Option<ArchipelCard>, Option<ArchipelWallet>, Option<Archipel3DS>) = match payment_information {
+            ArchipelPaymentInformation::CardPayment(cpay) => {
+                (Some(cpay.card), cpay.wallet, cpay.three_ds)
+            }
+            ArchipelPaymentInformation::WalletPayment(wpay) => {
+                (wpay.card, Some(wpay.wallet), Some(wpay.three_ds))
+            }
+        };
+
+        let cardholder = Some(ArchipelCardHolder {
+            billing_address: ArchipelBillingAddress::try_from(billing_details).ok()
+        });
+
+        // TODO: bind credentialsIndicator
+        let credential_indicator = Some(ArchipelCredentialIndicator {
+            status: ArchipelCredentialIndicatorStatus::Initial,
+            recurring: Some(false),
+            transaction_id: None
+        });
+
+        // TODO: bind stored_on_file. False by default
+        let stored_on_file = false;
+
+        let tenant_id: String = item.tenant_id.clone();
+
+        // TODO: bind tenant_id
+        let token_id: Option<String> = None;
+
+        Ok(Self {
+            order,
+            cardholder,
+            card,
+            wallet,
+            three_ds,
+            credential_indicator,
+            stored_on_file,
+            tenant_id,
+            token_id,
+        })
+    }
+}
+
+// PaymentsResponse
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "UPPERCASE")]
+pub enum ArchipelPaymentStatus {
+    Pending,
+    Accepted,
+    Refused,
+    Error,
+    New,
+}
+
+// TODO: Add all possible cases
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum ArchipelPaymentCase {
+    Verify,
+    Authorize,
+    Pay,
+    MerchantInitiatedTransaction,
+    IncrementalAuthorization,
+    Capture,
+    Refund,
+    Cancel,
+    PaymentSync,
+    RefundSync
+}
+
+fn get_transaction_status(attempt_status: ArchipelPaymentStatus, payment_case: ArchipelPaymentCase)
+    -> Result<enums::AttemptStatus, errors::ConnectorError> {
+    // TODO: Status matches to be defined
+    match payment_case {
+        ArchipelPaymentCase::Verify => {
+            match attempt_status {
+                ArchipelPaymentStatus::New => Ok(enums::AttemptStatus::Started),
+                ArchipelPaymentStatus::Pending => Ok(enums::AttemptStatus::AuthenticationPending),
+                | ArchipelPaymentStatus::Accepted => Ok(enums::AttemptStatus::AuthenticationSuccessful),
+                ArchipelPaymentStatus::Refused => Ok(enums::AttemptStatus::AuthenticationFailed),
+                ArchipelPaymentStatus::Error => Ok(enums::AttemptStatus::Failure)
+            }
+        },
+        ArchipelPaymentCase::Pay
+        | ArchipelPaymentCase::Capture => {
+            match attempt_status {
+                ArchipelPaymentStatus::New => Ok(enums::AttemptStatus::Started),
+                ArchipelPaymentStatus::Pending
+                | ArchipelPaymentStatus::Accepted => Ok(enums::AttemptStatus::CaptureInitiated),
+                ArchipelPaymentStatus::Refused => Ok(enums::AttemptStatus::CaptureFailed),
+                ArchipelPaymentStatus::Error => Ok(enums::AttemptStatus::Failure)
+            }
+        },
+        ArchipelPaymentCase::Authorize
+        | ArchipelPaymentCase::IncrementalAuthorization
+        | ArchipelPaymentCase::MerchantInitiatedTransaction
+        | ArchipelPaymentCase::Refund => {
+            match attempt_status {
+                ArchipelPaymentStatus::New => Ok(enums::AttemptStatus::Started),
+                ArchipelPaymentStatus::Pending => Ok(enums::AttemptStatus::Authorizing),
+                ArchipelPaymentStatus::Accepted => Ok(enums::AttemptStatus::Authorized),
+                ArchipelPaymentStatus::Refused => Ok(enums::AttemptStatus::AuthorizationFailed),
+                ArchipelPaymentStatus::Error => Ok(enums::AttemptStatus::Failure)
+            }
+        },
+        ArchipelPaymentCase::Cancel => {
+            match attempt_status {
+                ArchipelPaymentStatus::New => Ok(enums::AttemptStatus::Started),
+                ArchipelPaymentStatus::Pending => Ok(enums::AttemptStatus::VoidInitiated),
+                ArchipelPaymentStatus::Accepted => Ok(enums::AttemptStatus::Voided),
+                ArchipelPaymentStatus::Refused => Ok(enums::AttemptStatus::VoidFailed),
+                ArchipelPaymentStatus::Error => Ok(enums::AttemptStatus::Failure)
+            }
+        }
+        ArchipelPaymentCase::PaymentSync => {
+            // TODO : Implement Mapping for PSync flow
+            Err(errors::ConnectorError::NotImplemented(
+                "Payment status mapping for Archipel connector PaymentSync".to_string())
+            )
+        },
+        ArchipelPaymentCase::RefundSync => {
+            // TODO : Implement Mapping for RSync flow
+            Err(errors::ConnectorError::NotImplemented(
+                "Payment status mapping for for Archipel connector RefundSync".to_string())
+            )
+        },
+    }
+}
+
+
+
+//TODO: Fill the struct with respective fields
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ArchipelErrorResponse {
+    pub status_code: u16,
+    pub code: String,
+    pub message: String,
+    pub reason: Option<String>,
+}
+
+// TODO: Change captured_amount by authorized_amount
+#[derive(Debug, Serialize, Deserialize, Eq, PartialEq, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ArchipelOrderResponse {
+    id: String,
+    captured_amount: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ArchipelErrorMessage {
+    pub code: String,
+    pub description: Option<String>,
+}
+
+//TODO: Fill the struct with respective fields
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ArchipelPaymentsResponse {
+    order: ArchipelOrderResponse,
+    transaction_id: String,
+    transaction_date: String,
+    status: ArchipelPaymentStatus,
+    error: Option<ArchipelErrorMessage>,
+    financial_network_code: Option<String>,
+    issuer_transaction_id: Option<String>,
+    response_code: Option<String>,
+    authorization_code: Option<String>,
+    payment_account_reference: Option<String>,
+}
+impl ArchipelPaymentsResponse {
+     pub fn get_metadata(&self) -> ArchipelTransactionMetadata {
+        ArchipelTransactionMetadata {
+         transaction_id: Some(self.transaction_id.clone()),
+         issuer_transaction_id: self.issuer_transaction_id.clone(),
+         authorization_code: self.authorization_code.clone(),
+         financial_network_code: self.financial_network_code.clone(),
+         payment_account_reference: self.payment_account_reference.clone(),
+         response_code: self.response_code.clone(),
+         transaction_date: Some(self.transaction_date.clone())
+        }
+     }
+}
+
+
+// Handle responses for Payments Authorization Flow
+impl<F> TryFrom<
+    types::ResponseRouterData<F,
+        ArchipelPaymentsResponse,
+        types::PaymentsAuthorizeData,
+        types::PaymentsResponseData>> for types::RouterData<F, types::PaymentsAuthorizeData, types::PaymentsResponseData> {
+    type Error = error_stack::Report<errors::ConnectorError>;
+    fn try_from(item: types::ResponseRouterData<F,
+        ArchipelPaymentsResponse,
+        types::PaymentsAuthorizeData,
+        types::PaymentsResponseData>) -> Result<Self, Self::Error> {
+
+        let capture_method = item.data.request.capture_method
+            .clone()
+            .ok_or(errors::ConnectorError::CaptureMethodNotSupported)?;
+
+        let status = match capture_method {
+            /* Receive Autho + Capture response from Archipel ([/pay]) */
+            enums::CaptureMethod::Automatic => {
+                get_transaction_status(item.response.status.clone(), ArchipelPaymentCase::Pay)
+            },
+            enums::CaptureMethod::Manual => {
+                /* Receive Authorization only response from Archipel
+                TODO: Implement the case for Authorization only ([/authorize])
+                TODO: Implement status mapping for authorize only */
+                Err(errors::ConnectorError::NotImplemented(
+                    "Archipel response transform for manual capture".to_string())
+                )
+            }
+            _ => {
+                Err(errors::ConnectorError::CaptureMethodNotSupported)
+            }}?;
+
+        let connector_metadata: Option<serde_json::Value> = item
+            .response
+            .get_metadata()
+            .encode_to_value()
+            .ok();
+
+        Ok(Self {
+            // TODO: Update statuses when mapping will be ok
+            status,
             response: Ok(types::PaymentsResponseData::TransactionResponse {
-                resource_id: types::ResponseId::ConnectorTransactionId(item.response.id),
+                resource_id: types::ResponseId::ConnectorTransactionId(item.response.order.id.clone()),
+                charge_id: None,
                 redirection_data: None,
                 mandate_reference: None,
-                connector_metadata: None,
+                connector_metadata,
                 network_txn_id: None,
                 connector_response_reference_id: None,
                 incremental_authorization_allowed: None,
             }),
             ..item.data
         })
+    }
+}
+
+
+//TODO: Handle response for Payments Sync flow
+impl<F> TryFrom<types::ResponseRouterData<F,
+    ArchipelPaymentsResponse,
+    types::PaymentsSyncData,
+    types::PaymentsResponseData>> for types::RouterData<F, types::PaymentsSyncData, types::PaymentsResponseData> {
+    type Error = error_stack::Report<errors::ConnectorError>;
+    fn try_from(item: types::ResponseRouterData<
+        F,
+        ArchipelPaymentsResponse,
+        types::PaymentsSyncData,
+        types::PaymentsResponseData>) -> Result<Self,Self::Error> {
+        Err(report!(errors::ConnectorError::NotImplemented(
+            "Response Handling for PSync flow on Archipel connector".to_string()
+        )))
+    }
+}
+
+//TODO: Handle response for Payments Capture flow
+impl<F> TryFrom<types::ResponseRouterData<F,
+    ArchipelPaymentsResponse,
+    types::PaymentsCaptureData,
+    types::PaymentsResponseData>> for types::RouterData<F, types::PaymentsCaptureData, types::PaymentsResponseData> {
+    type Error = error_stack::Report<errors::ConnectorError>;
+    fn try_from(item: types::ResponseRouterData<
+        F,
+        ArchipelPaymentsResponse,
+        types::PaymentsCaptureData,
+        types::PaymentsResponseData>) -> Result<Self,Self::Error> {
+        Err(report!(errors::ConnectorError::NotImplemented(
+            "Response Handling for Capture flow on Archipel connector".to_string()
+        )))
     }
 }
 
@@ -213,11 +633,3 @@ impl TryFrom<types::RefundsResponseRouterData<api::RSync, RefundResponse>> for t
     }
 }
 
-//TODO: Fill the struct with respective fields
-#[derive(Default, Debug, Serialize, Deserialize, PartialEq)]
-pub struct ArchipelErrorResponse {
-    pub status_code: u16,
-    pub code: String,
-    pub message: String,
-    pub reason: Option<String>,
-}
