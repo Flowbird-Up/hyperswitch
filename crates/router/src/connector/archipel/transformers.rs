@@ -1,4 +1,4 @@
-use error_stack::{report};
+use error_stack::report;
 use serde::{Deserialize, Serialize};
 use api_models::payments::AddressDetails;
 use common_utils::ext_traits::Encode;
@@ -395,10 +395,14 @@ fn get_transaction_status(attempt_status: ArchipelPaymentStatus, payment_case: A
             }
         }
         ArchipelPaymentCase::PaymentSync => {
-            // TODO : Implement Mapping for PSync flow
-            Err(errors::ConnectorError::NotImplemented(
-                "Payment status mapping for Archipel connector PaymentSync".to_string())
-            )
+            // TODO : REVIEW Mapping for PSync flow
+            match attempt_status {
+                ArchipelPaymentStatus::Pending => Ok(enums::AttemptStatus::Pending),
+                ArchipelPaymentStatus::Accepted => Ok(enums::AttemptStatus::Charged),
+                ArchipelPaymentStatus::Refused => Ok(enums::AttemptStatus::RouterDeclined),
+                ArchipelPaymentStatus::New
+                | ArchipelPaymentStatus::Error => Ok(enums::AttemptStatus::Failure)
+            }
         },
         ArchipelPaymentCase::RefundSync => {
             // TODO : Implement Mapping for RSync flow
@@ -521,7 +525,6 @@ impl<F> TryFrom<
     }
 }
 
-
 //TODO: Handle response for Payments Sync flow
 impl<F> TryFrom<types::ResponseRouterData<F,
     ArchipelPaymentsResponse,
@@ -533,9 +536,28 @@ impl<F> TryFrom<types::ResponseRouterData<F,
         ArchipelPaymentsResponse,
         types::PaymentsSyncData,
         types::PaymentsResponseData>) -> Result<Self,Self::Error> {
-        Err(report!(errors::ConnectorError::NotImplemented(
-            "Response Handling for PSync flow on Archipel connector".to_string()
-        )))
+        let status = get_transaction_status(item.response.status.clone(),
+                                            ArchipelPaymentCase::PaymentSync)?;
+        let connector_metadata: Option<serde_json::Value> = item
+            .response
+            .get_metadata()
+            .encode_to_value()
+            .ok();
+
+        Ok(Self {
+            status,
+            response: Ok(types::PaymentsResponseData::TransactionResponse {
+                resource_id: types::ResponseId::ConnectorTransactionId(item.response.order.id.clone()),
+                charge_id: None,
+                redirection_data: None,
+                mandate_reference: None,
+                connector_metadata,
+                network_txn_id: None,
+                connector_response_reference_id: None,
+                incremental_authorization_allowed: None,
+            }),
+            ..item.data
+        })
     }
 }
 
