@@ -326,17 +326,6 @@ impl TryFrom<&ArchipelRouterData<&types::PaymentsAuthorizeRouterData>> for Archi
 
 // PaymentsResponse
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum ArchipelMessageType {
-    Autho,
-    Avr,
-    Clearing,
-    InformationRequest,
-    PreAutho,
-    Reversal
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "UPPERCASE")]
 pub enum ArchipelPaymentStatus {
     Pending,
@@ -361,9 +350,7 @@ pub enum ArchipelPaymentCase {
     RefundSync
 }
 
-fn get_transaction_status(attempt_status: ArchipelPaymentStatus,
-                          payment_case: ArchipelPaymentCase,
-                          message_type: Option<ArchipelMessageType>)
+fn get_transaction_status(attempt_status: ArchipelPaymentStatus, payment_case: ArchipelPaymentCase)
     -> Result<enums::AttemptStatus, errors::ConnectorError> {
     // TODO: Status matches to be defined
     match payment_case {
@@ -496,7 +483,7 @@ impl<F> TryFrom<
         let status = match capture_method {
             /* Receive Autho + Capture response from Archipel ([/pay]) */
             enums::CaptureMethod::Automatic => {
-                get_transaction_status(item.response.status.clone(), ArchipelPaymentCase::Pay, None)
+                get_transaction_status(item.response.status.clone(), ArchipelPaymentCase::Pay)
             },
             enums::CaptureMethod::Manual => {
                 /* Receive Authorization only response from Archipel
