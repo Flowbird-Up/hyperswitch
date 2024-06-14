@@ -3,6 +3,7 @@
     "Payments - Create",
     "Payments - Retrieve",
     "Payments - Confirm",
-    "Payments - Retrieve no connector sync"
+    "Payments - Retrieve no connector sync",
+    "Payments - Retrieve with connector sync"
   ]
 }

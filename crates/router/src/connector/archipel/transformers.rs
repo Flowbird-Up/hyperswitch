@@ -508,7 +508,6 @@ impl<F> TryFrom<
             .ok();
 
         Ok(Self {
-            // TODO: Update statuses when mapping will be ok
             status,
             response: Ok(types::PaymentsResponseData::TransactionResponse {
                 resource_id: types::ResponseId::ConnectorTransactionId(item.response.order.id.clone()),
@@ -525,7 +524,6 @@ impl<F> TryFrom<
     }
 }
 
-//TODO: Handle response for Payments Sync flow
 impl<F> TryFrom<types::ResponseRouterData<F,
     ArchipelPaymentsResponse,
     types::PaymentsSyncData,
