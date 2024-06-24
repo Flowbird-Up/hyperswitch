@@ -2,12 +2,12 @@
   "variable": [
     {
       "key": "baseUrl",
-      "value": "127.0.0.1:8080",
+      "value": "",
       "type": "string"
     },
     {
       "key": "admin_api_key",
-      "value": "test_admin",
+      "value": "",
       "type": "string"
     },
     {

@@ -2,6 +2,7 @@ use std::fmt::Debug;
 use error_stack::{report, ResultExt};
 use http::StatusCode;
 use serde::Deserialize;
+use common_utils::ext_traits::ValueExt;
 use common_utils::pii::SecretSerdeValue;
 use diesel_models::enums;
 use masking::ExposeInterface;
@@ -234,7 +235,6 @@ impl ConnectorIntegration<api::Authorize,
     fn get_error_response(&self,
                           res: Response,
                           event_builder: Option<&mut ConnectorEvent>) -> CustomResult<ErrorResponse,errors::ConnectorError> {
-        router_env::logger::debug!(connector_error_response=?event_builder);
         self.build_error_response(res, event_builder)
     }
 
@@ -275,10 +275,17 @@ impl ConnectorIntegration<api::PSync,
 
     fn get_url(
         &self,
-        _req: &types::PaymentsSyncRouterData,
-        _connectors: &settings::Connectors,
+        req: &types::PaymentsSyncRouterData,
+        connectors: &settings::Connectors,
     ) -> CustomResult<String, errors::ConnectorError> {
-        Err(errors::ConnectorError::NotImplemented("get_url method".to_string()).into())
+        let metadata: archipel::ArchipelTransactionMetadata = req.request.connector_meta.clone()
+            .unwrap()
+            .parse_value("ArchipelTransactionMetadata")
+            .change_context(errors::ConnectorError::MissingConnectorTransactionID)?;
+        Ok(format!("{}{}{}", self.base_url(connectors),
+                   "Transaction/v1/transactions/",
+                   metadata.transaction_id.unwrap_or(String::new()))
+        )
     }
 
     fn build_request(
