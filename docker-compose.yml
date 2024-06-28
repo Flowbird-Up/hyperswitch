@@ -46,7 +46,6 @@ services:
   ### Application services
   hyperswitch-server:
     image: juspaydotin/hyperswitch-router:standalone
-    pull_policy: always
     command: /local/bin/router -f /local/config/docker_compose.toml
     ports:
       - "8080:8080"
@@ -66,7 +65,6 @@ services:
 
   hyperswitch-producer:
     image: juspaydotin/hyperswitch-producer:standalone
-    pull_policy: always
     command: /local/bin/scheduler -f /local/config/docker_compose.toml
     networks:
       - router_net
@@ -84,7 +82,6 @@ services:
 
   hyperswitch-consumer:
     image: juspaydotin/hyperswitch-consumer:standalone
-    pull_policy: always
     command: /local/bin/scheduler -f /local/config/docker_compose.toml
     networks:
       - router_net
@@ -108,7 +105,6 @@ services:
 
   hyperswitch-drainer:
     image: juspaydotin/hyperswitch-drainer:standalone
-    pull_policy: always
     command: /local/bin/drainer -f /local/config/docker_compose.toml
     deploy:
       replicas: ${DRAINER_INSTANCE_COUNT:-1}
@@ -144,13 +140,12 @@ services:
       - ENV_SDK_URL=${ENV_SDK_URL:-http://localhost:9050}
       - ENV_BACKEND_URL=${ENV_BACKEND_URL:-http://localhost:8080}
       - ENV_LOGGING_URL=${ENV_LOGGING_URL:-http://localhost:3100}
-    labels:  
-      logs: "promtail"  
+    labels:
+      logs: "promtail"
 
   ### Control Center
   hyperswitch-control-center:
     image: juspaydotin/hyperswitch-control-center:latest
-    pull_policy: always
     ports:
       - "9000:9000"
     environment:
@@ -159,8 +154,8 @@ services:
       - ./config/dashboard.toml:/tmp/dashboard-config.toml
     depends_on:
       - hyperswitch-web
-    labels:  
-      logs: "promtail" 
+    labels:
+      logs: "promtail"
 
   ### Clustered Redis setup
   redis-cluster:
@@ -324,7 +319,7 @@ services:
       JMX_PORT: 9997
       KAFKA_JMX_OPTS: -Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false -Djava.rmi.server.hostname=kafka0 -Dcom.sun.management.jmxremote.rmi.port=9997
     profiles:
-      - olap
+      - analytics
     volumes:
       - ./monitoring/kafka-script.sh:/tmp/update_run.sh
     command: "bash -c 'if [ ! -f /tmp/update_run.sh ]; then echo \"ERROR: Did you forget the update_run.sh file that came with this docker-compose.yml file?\" && exit 1 ; else /tmp/update_run.sh && /etc/confluent/docker/run ; fi'"
@@ -339,7 +334,7 @@ services:
     depends_on:
       - kafka0
     profiles:
-      - olap
+      - analytics
     environment:
       KAFKA_CLUSTERS_0_NAME: local
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka0:29092
@@ -355,7 +350,7 @@ services:
     volumes:
       - ./crates/analytics/docs/clickhouse/scripts:/docker-entrypoint-initdb.d
     profiles:
-      - olap
+      - analytics
     ulimits:
       nofile:
         soft: 262144
