@@ -384,7 +384,7 @@ fn get_transaction_status(attempt_status: ArchipelPaymentStatus, payment_case: A
                 ArchipelPaymentStatus::Refused => Ok(enums::AttemptStatus::AuthorizationFailed),
                 ArchipelPaymentStatus::Error => Ok(enums::AttemptStatus::Failure)
             }
-        },
+        }, 
         ArchipelPaymentCase::Cancel => {
             match attempt_status {
                 ArchipelPaymentStatus::New => Ok(enums::AttemptStatus::Started),
@@ -424,12 +424,11 @@ pub struct ArchipelErrorResponse {
     pub reason: Option<String>,
 }
 
-// TODO: Change captured_amount by authorized_amount
 #[derive(Debug, Serialize, Deserialize, Eq, PartialEq, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct ArchipelOrderResponse {
     id: String,
-    captured_amount: i64,
+    authorized_amount: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -467,7 +466,6 @@ impl ArchipelPaymentsResponse {
      }
 }
 
-
 // Handle responses for Payments Authorization Flow
 impl<F> TryFrom<
     types::ResponseRouterData<F,
@@ -490,12 +488,8 @@ impl<F> TryFrom<
                 get_transaction_status(item.response.status.clone(), ArchipelPaymentCase::Pay)
             },
             enums::CaptureMethod::Manual => {
-                /* Receive Authorization only response from Archipel
-                TODO: Implement the case for Authorization only ([/authorize])
-                TODO: Implement status mapping for authorize only */
-                Err(errors::ConnectorError::NotImplemented(
-                    "Archipel response transform for manual capture".to_string())
-                )
+                /* Receive Authorization only response from Archipel */
+                get_transaction_status(item.response.status.clone(), ArchipelPaymentCase::Authorize)
             }
             _ => {
                 Err(errors::ConnectorError::CaptureMethodNotSupported)

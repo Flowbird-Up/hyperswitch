@@ -118,8 +118,7 @@ impl ConnectorValidation for Archipel {
                                _pmt: Option<enums::PaymentMethodType>) -> CustomResult<(), errors::ConnectorError> {
         let capture_method = capture_method.unwrap_or_default();
         match capture_method {
-            enums::CaptureMethod::Automatic => Ok(()),
-            enums::CaptureMethod::Manual
+            enums::CaptureMethod::Automatic | enums::CaptureMethod::Manual => Ok(()),
             | enums::CaptureMethod::ManualMultiple
             | enums::CaptureMethod::Scheduled => {
                 Err(errors::ConnectorError::NotSupported {
@@ -161,9 +160,9 @@ impl ConnectorIntegration<api::Authorize,
     }
 
     fn get_url(&self,
-               _req: &types::PaymentsAuthorizeRouterData,
+               req: &types::PaymentsAuthorizeRouterData,
                connectors: &settings::Connectors, ) -> CustomResult<String, errors::ConnectorError> {
-        let capture_method = _req.request.capture_method.ok_or(errors::ConnectorError::CaptureMethodNotSupported)?;
+        let capture_method = req.request.capture_method.ok_or(errors::ConnectorError::CaptureMethodNotSupported)?;
         match capture_method {
             enums::CaptureMethod::Automatic => {
                 Ok(format!("{}{}", self.base_url(connectors), "Transaction/v1/pay"))
@@ -546,7 +545,9 @@ impl ConnectorIntegration<api::SetupMandate,
 
 impl ConnectorIntegration<api::Void,
     types::PaymentsCancelData,
-    types::PaymentsResponseData, > for Archipel {}
+    types::PaymentsResponseData, > for Archipel {
+
+    }
 
 impl ConnectorIntegration<api::PoRecipientAccount,
     types::PayoutsData,
