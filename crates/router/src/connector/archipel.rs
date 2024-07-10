@@ -19,8 +19,9 @@ use crate::{
         ErrorResponse, RequestContent,
         Response
     },
-    utils::{BytesExt},
-    connector::utils::RouterData};
+    utils::BytesExt,
+    connector::utils::RouterData
+};
 
 pub mod transformers;
 
@@ -133,14 +134,20 @@ impl ConnectorValidation for Archipel {
 
 #[derive(Debug, Deserialize)]
 struct ConnectorMetadata {
-    tenant_id: String
+    tenant_id: Option<String>
 }
 
-fn get_tenant_id(connector_metadata: SecretSerdeValue) -> String {
-    let unwrap_data: ConnectorMetadata = serde_json::from_value(connector_metadata.expose()).unwrap_or(
-        ConnectorMetadata {
-            tenant_id: "0".to_string()
-        });
+impl Default for ConnectorMetadata {
+    fn default() -> Self { 
+        ConnectorMetadata { 
+            tenant_id: None
+        } 
+    }
+}
+
+fn get_tenant_id(connector_metadata: SecretSerdeValue) -> Option<String> {
+    let unwrap_data: ConnectorMetadata = serde_json::from_value(connector_metadata.expose())
+        .unwrap_or(ConnectorMetadata::default());
     // TODO: remove debug log
     router_env::debug!(get_tenant_id=format!("{:?}", unwrap_data));
     unwrap_data.tenant_id
@@ -180,7 +187,7 @@ impl ConnectorIntegration<api::Authorize,
     fn get_request_body(&self,
                         req: &types::PaymentsAuthorizeRouterData,
                         _connectors: &settings::Connectors,) -> CustomResult<RequestContent, errors::ConnectorError> {
-        let tenant = get_tenant_id(req.get_connector_meta().unwrap());
+        let tenant: Option<String> = get_tenant_id(req.get_connector_meta()?);
         let connector_router_data =
             archipel::ArchipelRouterData::try_from((
                 &self.get_currency_unit(),
@@ -347,18 +354,30 @@ impl ConnectorIntegration<api::Capture,
 
     fn get_url(
         &self,
-        _req: &types::PaymentsCaptureRouterData,
-        _connectors: &settings::Connectors,
+        req: &types::PaymentsCaptureRouterData,
+        connectors: &settings::Connectors,
     ) -> CustomResult<String, errors::ConnectorError> {
-        Err(errors::ConnectorError::NotImplemented("get_url method".to_string()).into())
+        Ok(format!("{}{}{}", self.base_url(connectors),
+                "Transaction/v1/capture/",
+                req.request.connector_transaction_id)
+        )
     }
 
     fn get_request_body(
         &self,
-        _req: &types::PaymentsCaptureRouterData,
+        req: &types::PaymentsCaptureRouterData,
         _connectors: &settings::Connectors,
     ) -> CustomResult<RequestContent, errors::ConnectorError> {
-        Err(errors::ConnectorError::NotImplemented("get_request_body method".to_string()).into())
+        let connector_router_data =
+            archipel::ArchipelRouterData::try_from((
+                &self.get_currency_unit(),
+                req.request.currency,
+                req.request.amount_to_capture,
+                req,
+                None,
+            ))?;
+        let connector_req = archipel::ArchipelCaptureRequest::try_from(&connector_router_data)?;
+        Ok(RequestContent::Json(Box::new(connector_req)))
     }
 
     fn build_request(
@@ -385,9 +404,9 @@ impl ConnectorIntegration<api::Capture,
         event_builder: Option<&mut ConnectorEvent>,
         res: Response,
     ) -> CustomResult<types::PaymentsCaptureRouterData, errors::ConnectorError> {
-        let response: archipel::ArchipelPaymentsResponse = res
+        let response: archipel::ArchipelCaptureResponse = res
             .response
-            .parse_struct("Archipel PaymentsCaptureResponse")
+            .parse_struct("ArchipelCaptureResponse")
             .change_context(errors::ConnectorError::ResponseDeserializationFailed)?;
         event_builder.map(|i| i.set_response_body(&response));
         router_env::logger::info!(connector_response=?response);
