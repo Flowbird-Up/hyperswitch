@@ -430,7 +430,10 @@ pub struct ArchipelErrorResponse {
 #[serde(rename_all = "camelCase")]
 pub struct ArchipelOrderResponse {
     id: String,
-    authorized_amount: i64,
+    amount: Option<i64>,
+    currency: Option<enums::Currency>,
+    captured_amount: Option<i64>,
+    authorized_amount: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -521,8 +524,9 @@ impl<F> TryFrom<
     }
 }
 
+/* PSync Flow */
 impl<F> TryFrom<types::ResponseRouterData<F,
-ArchipelPaymentsResponse,
+    ArchipelPaymentsResponse,
     types::PaymentsSyncData,
     types::PaymentsResponseData>> for types::RouterData<F, types::PaymentsSyncData, types::PaymentsResponseData> {
     type Error = error_stack::Report<errors::ConnectorError>;
@@ -542,7 +546,7 @@ ArchipelPaymentsResponse,
         Ok(Self {
             status,
             response: Ok(types::PaymentsResponseData::TransactionResponse {
-                resource_id: types::ResponseId::ConnectorTransactionId(item.response.order.id.clone()),
+                resource_id: types::ResponseId::ConnectorTransactionId(item.response.order.id.to_owned()),
                 charge_id: None,
                 redirection_data: None,
                 mandate_reference: None,
@@ -551,6 +555,7 @@ ArchipelPaymentsResponse,
                 connector_response_reference_id: None,
                 incremental_authorization_allowed: None,
             }),
+            amount_captured: item.response.order.captured_amount.to_owned(),
             ..item.data
         })
     }
@@ -722,4 +727,3 @@ impl TryFrom<types::RefundsResponseRouterData<api::RSync, RefundResponse>> for t
         })
     }
 }
-
