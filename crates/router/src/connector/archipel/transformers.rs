@@ -1,4 +1,3 @@
-use error_stack::report;
 use serde::{Deserialize, Serialize};
 use api_models::payments::AddressDetails;
 use common_utils::ext_traits::Encode;
@@ -12,13 +11,13 @@ use crate::types::domain;
 pub struct ArchipelRouterData<T> {
     pub amount: i64, // The type of amount that a connector accepts, for example, String, i64, f64, etc.
     pub router_data: T,
-    pub tenant_id: String,
+    pub tenant_id: Option<String>,
 }
 
-impl<T> TryFrom<(&api::CurrencyUnit, enums::Currency, i64, T, String)> for ArchipelRouterData<T> {
+impl<T> TryFrom<(&api::CurrencyUnit, enums::Currency, i64, T, Option<String>)> for ArchipelRouterData<T> {
     type Error = error_stack::Report<errors::ConnectorError>;
     fn try_from((_currency_unit, _currency, amount, item, tenant):
-                (&api::CurrencyUnit, enums::Currency, i64, T, String), ) -> Result<Self, Self::Error> {
+                (&api::CurrencyUnit, enums::Currency, i64, T, Option<String>), ) -> Result<Self, Self::Error> {
         //Todo :  use utils to convert the amount to the type of amount that a connector accepts
         Ok(Self {
             amount,
@@ -305,7 +304,10 @@ impl TryFrom<&ArchipelRouterData<&types::PaymentsAuthorizeRouterData>> for Archi
         // TODO: bind stored_on_file. False by default
         let stored_on_file = false;
 
-        let tenant_id: String = item.tenant_id.clone();
+        let tenant_id: String = item.tenant_id.clone().ok_or(errors::ConnectorError::InvalidConnectorConfig { 
+            config: "Missing tenant_id. Please check your merchant connector account metadata."
+         })?;
+
 
         // TODO: bind tenant_id
         let token_id: Option<String> = None;
@@ -323,6 +325,7 @@ impl TryFrom<&ArchipelRouterData<&types::PaymentsAuthorizeRouterData>> for Archi
         })
     }
 }
+
 
 // PaymentsResponse
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -414,7 +417,6 @@ fn get_transaction_status(attempt_status: ArchipelPaymentStatus, payment_case: A
 }
 
 
-
 //TODO: Fill the struct with respective fields
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ArchipelErrorResponse {
@@ -452,6 +454,7 @@ pub struct ArchipelPaymentsResponse {
     authorization_code: Option<String>,
     payment_account_reference: Option<String>,
 }
+
 impl ArchipelPaymentsResponse {
      pub fn get_metadata(&self) -> ArchipelTransactionMetadata {
         ArchipelTransactionMetadata {
@@ -519,7 +522,7 @@ impl<F> TryFrom<
 }
 
 impl<F> TryFrom<types::ResponseRouterData<F,
-    ArchipelPaymentsResponse,
+ArchipelPaymentsResponse,
     types::PaymentsSyncData,
     types::PaymentsResponseData>> for types::RouterData<F, types::PaymentsSyncData, types::PaymentsResponseData> {
     type Error = error_stack::Report<errors::ConnectorError>;
@@ -553,25 +556,98 @@ impl<F> TryFrom<types::ResponseRouterData<F,
     }
 }
 
-//TODO: Handle response for Payments Capture flow
+/* CAPTURE FLOW */
+
+#[derive(Debug, Serialize, Eq, PartialEq)]
+pub struct ArchipelCaptureRequest {
+    order: ArchipelCaptureOrderRequest,
+}
+
+#[derive(Debug, Serialize, Eq, PartialEq)]
+pub struct ArchipelCaptureOrderRequest {
+    amount: i64,
+}
+
+impl TryFrom<&ArchipelRouterData<&types::PaymentsCaptureRouterData>> for ArchipelCaptureRequest  {
+    type Error = error_stack::Report<errors::ConnectorError>;
+    fn try_from(item: &ArchipelRouterData<&types::PaymentsCaptureRouterData>) -> Result<Self,Self::Error> {
+        Ok(Self {
+            order: ArchipelCaptureOrderRequest { 
+                amount: item.amount.to_owned(),
+            }
+        })
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ArchipelCaptureResponse {
+    order: ArchipelCaptureOrderResponse,
+    transaction_id: String,
+    transaction_date: String,
+    status: ArchipelPaymentStatus,
+    error: Option<ArchipelErrorMessage>,
+    financial_network_code: Option<String>,
+    response_code: Option<String>
+}
+
+impl ArchipelCaptureResponse {
+    pub fn get_metadata(&self) -> ArchipelTransactionMetadata {
+       ArchipelTransactionMetadata {
+        transaction_id: Some(self.transaction_id.clone()),
+        issuer_transaction_id: None,
+        authorization_code: None,
+        financial_network_code: self.financial_network_code.clone(),
+        payment_account_reference: None,
+        response_code: self.response_code.clone(),
+        transaction_date: Some(self.transaction_date.clone())
+       }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Eq, PartialEq)]
+pub struct ArchipelCaptureOrderResponse {
+    id: String,
+}
+
+
 impl<F> TryFrom<types::ResponseRouterData<F,
-    ArchipelPaymentsResponse,
+ArchipelCaptureResponse,
     types::PaymentsCaptureData,
     types::PaymentsResponseData>> for types::RouterData<F, types::PaymentsCaptureData, types::PaymentsResponseData> {
     type Error = error_stack::Report<errors::ConnectorError>;
     fn try_from(item: types::ResponseRouterData<
-        F,
-        ArchipelPaymentsResponse,
-        types::PaymentsCaptureData,
+        F, 
+        ArchipelCaptureResponse, 
+        types::PaymentsCaptureData, 
         types::PaymentsResponseData>) -> Result<Self,Self::Error> {
-        Err(report!(errors::ConnectorError::NotImplemented(
-            "Response Handling for Capture flow on Archipel connector".to_string()
-        )))
+            let status = get_transaction_status(item.response.status.clone(), 
+            ArchipelPaymentCase::Capture)?;
+            let connector_metadata: Option<serde_json::Value> = item
+                .response
+                .get_metadata()
+                .encode_to_value()
+                .ok();
+
+            Ok(Self {
+                status,
+                response: Ok(types::PaymentsResponseData::TransactionResponse {
+                resource_id: types::ResponseId::ConnectorTransactionId(item.response.order.id.to_owned()),
+                charge_id: None,
+                redirection_data: None,
+                mandate_reference: None,
+                connector_metadata,
+                network_txn_id: None,
+                connector_response_reference_id: None,
+                incremental_authorization_allowed: None,
+            }),
+            ..item.data
+        })
     }
 }
 
+/* REFUND FLOW */
 //TODO: Fill the struct with respective fields
-// REFUND :
 // Type definition for RefundRequest
 #[derive(Default, Debug, Serialize)]
 pub struct ArchipelRefundRequest {

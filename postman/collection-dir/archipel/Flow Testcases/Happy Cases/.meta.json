@@ -2,7 +2,7 @@
   "childrenOrder": [
     "Scenario1-Create payment with confirm true",
     "Scenario2-Create payment with confirm false",
-    "Scenario3a-Create payment with Manual capture and confirm true",
-    "Scenario3b-Create payment with Manual capture and confirm false"
+    "Scenario3a-Create payment with Manual capture",
+    "Scenario3b-Create payment with partial capture"
   ]
 }
