@@ -522,7 +522,7 @@ impl<F> TryFrom<
 }
 
 impl<F> TryFrom<types::ResponseRouterData<F,
-    ArchipelPaymentsResponse,
+ArchipelPaymentsResponse,
     types::PaymentsSyncData,
     types::PaymentsResponseData>> for types::RouterData<F, types::PaymentsSyncData, types::PaymentsResponseData> {
     type Error = error_stack::Report<errors::ConnectorError>;
@@ -591,6 +591,20 @@ pub struct ArchipelCaptureResponse {
     response_code: Option<String>
 }
 
+impl ArchipelCaptureResponse {
+    pub fn get_metadata(&self) -> ArchipelTransactionMetadata {
+       ArchipelTransactionMetadata {
+        transaction_id: Some(self.transaction_id.clone()),
+        issuer_transaction_id: None,
+        authorization_code: None,
+        financial_network_code: self.financial_network_code.clone(),
+        payment_account_reference: None,
+        response_code: self.response_code.clone(),
+        transaction_date: Some(self.transaction_date.clone())
+       }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct ArchipelCaptureOrderResponse {
     id: String,
@@ -610,15 +624,15 @@ ArchipelCaptureResponse,
             let status = get_transaction_status(item.response.status.clone(), 
             ArchipelPaymentCase::Capture)?;
             let connector_metadata: Option<serde_json::Value> = item
-                .data
-                .request
-                .connector_meta
-                .clone();
+                .response
+                .get_metadata()
+                .encode_to_value()
+                .ok();
 
             Ok(Self {
                 status,
                 response: Ok(types::PaymentsResponseData::TransactionResponse {
-                resource_id: types::ResponseId::ConnectorTransactionId(item.response.order.id.clone()),
+                resource_id: types::ResponseId::ConnectorTransactionId(item.response.order.id.to_owned()),
                 charge_id: None,
                 redirection_data: None,
                 mandate_reference: None,
