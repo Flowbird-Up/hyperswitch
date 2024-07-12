@@ -41,17 +41,6 @@ impl TryFrom<&types::ConnectorAuthType> for ArchipelAuthType  {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Eq, PartialEq, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct ArchipelTransactionMetadata {
-    pub transaction_id: Option<String>,
-    pub transaction_date: Option<String>,
-    pub financial_network_code: Option<String>,
-    pub issuer_transaction_id: Option<String>,
-    pub response_code: Option<String>,
-    pub authorization_code: Option<String>,
-    pub payment_account_reference: Option<String>,
-}
 
 #[derive(Debug, Serialize, Eq, PartialEq)]
 #[serde(untagged)]
@@ -436,6 +425,36 @@ pub struct ArchipelErrorMessage {
     pub description: Option<String>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Eq, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ArchipelTransactionMetadata {
+    pub transaction_id: String,
+    pub transaction_date: String
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ArchipelTransactionReference {
+    pub financial_network_code: Option<String>,
+    pub issuer_transaction_id: Option<String>,
+    pub response_code: Option<String>,
+    pub authorization_code: Option<String>,
+    pub payment_account_reference: Option<String>,
+}
+
+impl From<&ArchipelTransactionReference> for types::AdditionalPaymentMethodConnectorResponse {
+    fn from(transaction_reference: &ArchipelTransactionReference) -> Self {
+        let payment_checks = Some(
+            serde_json::json!(transaction_reference),
+        );
+
+        Self::Card {
+            authentication_data: None,
+            payment_checks,
+        }
+    }
+}
+
 //TODO: Fill the struct with respective fields
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -452,18 +471,25 @@ pub struct ArchipelPaymentsResponse {
     payment_account_reference: Option<String>,
 }
 
-impl ArchipelPaymentsResponse {
-     pub fn get_metadata(&self) -> ArchipelTransactionMetadata {
-        ArchipelTransactionMetadata {
-         transaction_id: Some(self.transaction_id.clone()),
-         issuer_transaction_id: self.issuer_transaction_id.clone(),
-         authorization_code: self.authorization_code.clone(),
-         financial_network_code: self.financial_network_code.clone(),
-         payment_account_reference: self.payment_account_reference.clone(),
-         response_code: self.response_code.clone(),
-         transaction_date: Some(self.transaction_date.clone())
+impl From<&ArchipelPaymentsResponse> for ArchipelTransactionMetadata {
+    fn from(payment_response: &ArchipelPaymentsResponse) -> Self {
+        Self { 
+            transaction_id: payment_response.transaction_id.clone(),
+            transaction_date: payment_response.transaction_date.clone()  
         }
-     }
+    }
+}
+
+impl From<&ArchipelPaymentsResponse> for ArchipelTransactionReference {
+    fn from(payment_response: &ArchipelPaymentsResponse) -> Self {
+        Self { 
+            financial_network_code: payment_response.financial_network_code.clone(), 
+            issuer_transaction_id: payment_response.issuer_transaction_id.clone(), 
+            response_code: payment_response.response_code.clone(), 
+            authorization_code: payment_response.authorization_code.clone(), 
+            payment_account_reference: payment_response.payment_account_reference.clone()
+        }
+    }
 }
 
 // Handle responses for Payments Authorization Flow
@@ -488,18 +514,24 @@ impl<F> TryFrom<
                 get_transaction_status(item.response.status.clone(), ArchipelPaymentCase::Pay)
             },
             enums::CaptureMethod::Manual => {
-                /* Receive Authorization only response from Archipel */
+            /* Receive Authorization only response from Archipel */
                 get_transaction_status(item.response.status.clone(), ArchipelPaymentCase::Authorize)
             }
             _ => {
                 Err(errors::ConnectorError::CaptureMethodNotSupported)
             }}?;
 
-        let connector_metadata: Option<serde_json::Value> = item
-            .response
-            .get_metadata()
+        let metadata: Option<serde_json::Value> = ArchipelTransactionMetadata::from(&item.response)
             .encode_to_value()
             .ok();
+
+        let transaction_reference: Option<types::ConnectorResponseData> = Some(
+            types::ConnectorResponseData::with_additional_payment_method_data(
+                types::AdditionalPaymentMethodConnectorResponse::from(
+                    &ArchipelTransactionReference::from(&item.response)
+                )
+            )
+        );
 
         Ok(Self {
             status,
@@ -508,11 +540,12 @@ impl<F> TryFrom<
                 charge_id: None,
                 redirection_data: None,
                 mandate_reference: None,
-                connector_metadata,
+                connector_metadata: metadata,
                 network_txn_id: None,
                 connector_response_reference_id: None,
                 incremental_authorization_allowed: None,
             }),
+            connector_response: transaction_reference,
             ..item.data
         })
     }
@@ -531,11 +564,17 @@ impl<F> TryFrom<types::ResponseRouterData<F,
         types::PaymentsResponseData>) -> Result<Self,Self::Error> {
         let status = get_transaction_status(item.response.status.clone(),
                                             ArchipelPaymentCase::PaymentSync)?;
-        let connector_metadata: Option<serde_json::Value> = item
-            .response
-            .get_metadata()
+        let metadata: Option<serde_json::Value> = ArchipelTransactionMetadata::from(&item.response)
             .encode_to_value()
             .ok();
+
+        let payment_checks: Option<types::ConnectorResponseData> = Some(
+            types::ConnectorResponseData::with_additional_payment_method_data(
+                types::AdditionalPaymentMethodConnectorResponse::from(
+                    &ArchipelTransactionReference::from(&item.response)
+                )
+            )
+        );
 
         Ok(Self {
             status,
@@ -544,11 +583,12 @@ impl<F> TryFrom<types::ResponseRouterData<F,
                 charge_id: None,
                 redirection_data: None,
                 mandate_reference: None,
-                connector_metadata,
+                connector_metadata: metadata,
                 network_txn_id: None,
                 connector_response_reference_id: None,
                 incremental_authorization_allowed: None,
             }),
+            connector_response: payment_checks,
             amount_captured: item.response.order.captured_amount.to_owned(),
             ..item.data
         })
@@ -578,55 +618,29 @@ impl TryFrom<&ArchipelRouterData<&types::PaymentsCaptureRouterData>> for Archipe
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct ArchipelCaptureResponse {
-    order: ArchipelCaptureOrderResponse,
-    transaction_id: String,
-    transaction_date: String,
-    status: ArchipelPaymentStatus,
-    error: Option<ArchipelErrorMessage>,
-    financial_network_code: Option<String>,
-    response_code: Option<String>
-}
-
-impl ArchipelCaptureResponse {
-    pub fn get_metadata(&self) -> ArchipelTransactionMetadata {
-       ArchipelTransactionMetadata {
-        transaction_id: Some(self.transaction_id.clone()),
-        issuer_transaction_id: None,
-        authorization_code: None,
-        financial_network_code: self.financial_network_code.clone(),
-        payment_account_reference: None,
-        response_code: self.response_code.clone(),
-        transaction_date: Some(self.transaction_date.clone())
-       }
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize, Eq, PartialEq)]
-pub struct ArchipelCaptureOrderResponse {
-    id: String,
-}
-
-
 impl<F> TryFrom<types::ResponseRouterData<F,
-ArchipelCaptureResponse,
+    ArchipelPaymentsResponse,
     types::PaymentsCaptureData,
     types::PaymentsResponseData>> for types::RouterData<F, types::PaymentsCaptureData, types::PaymentsResponseData> {
     type Error = error_stack::Report<errors::ConnectorError>;
     fn try_from(item: types::ResponseRouterData<
         F, 
-        ArchipelCaptureResponse, 
+        ArchipelPaymentsResponse, 
         types::PaymentsCaptureData, 
         types::PaymentsResponseData>) -> Result<Self,Self::Error> {
             let status = get_transaction_status(item.response.status.clone(), 
             ArchipelPaymentCase::Capture)?;
-            let connector_metadata: Option<serde_json::Value> = item
-                .response
-                .get_metadata()
+            let connector_metadata: Option<serde_json::Value> = ArchipelTransactionMetadata::from(&item.response) 
                 .encode_to_value()
                 .ok();
+
+            let payment_checks: Option<types::ConnectorResponseData> = Some(
+                types::ConnectorResponseData::with_additional_payment_method_data(
+                    types::AdditionalPaymentMethodConnectorResponse::from(
+                        &ArchipelTransactionReference::from(&item.response)
+                    )
+                )
+            );
 
             Ok(Self {
                 status,
@@ -640,6 +654,7 @@ ArchipelCaptureResponse,
                 connector_response_reference_id: None,
                 incremental_authorization_allowed: None,
             }),
+            connector_response: payment_checks,
             ..item.data
         })
     }
