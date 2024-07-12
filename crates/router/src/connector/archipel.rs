@@ -315,9 +315,9 @@ impl ConnectorIntegration<api::PSync,
         event_builder: Option<&mut ConnectorEvent>,
         res: Response,
     ) -> CustomResult<types::PaymentsSyncRouterData, errors::ConnectorError> {
-        let response: archipel:: ArchipelPaymentsResponse = res
+        let response: archipel::ArchipelPaymentsResponse = res
             .response
-            .parse_struct("archipel PaymentsSyncResponse")
+            .parse_struct("ArchipelPaymentsResponse")
             .change_context(errors::ConnectorError::ResponseDeserializationFailed)?;
         event_builder.map(|i| i.set_response_body(&response));
         router_env::logger::info!(connector_response=?response);
