@@ -335,7 +335,6 @@ pub enum ArchipelPaymentStatus {
     Accepted,
     Refused,
     Error,
-    New,
 }
 
 // TODO: Add all possible cases
@@ -359,7 +358,6 @@ fn get_transaction_status(attempt_status: ArchipelPaymentStatus, payment_case: A
     match payment_case {
         ArchipelPaymentCase::Verify => {
             match attempt_status {
-                ArchipelPaymentStatus::New => Ok(enums::AttemptStatus::Started),
                 ArchipelPaymentStatus::Pending => Ok(enums::AttemptStatus::AuthenticationPending),
                 | ArchipelPaymentStatus::Accepted => Ok(enums::AttemptStatus::AuthenticationSuccessful),
                 ArchipelPaymentStatus::Refused => Ok(enums::AttemptStatus::AuthenticationFailed),
@@ -369,7 +367,6 @@ fn get_transaction_status(attempt_status: ArchipelPaymentStatus, payment_case: A
         ArchipelPaymentCase::Pay
         | ArchipelPaymentCase::Capture => {
             match attempt_status {
-                ArchipelPaymentStatus::New => Ok(enums::AttemptStatus::Started),
                 ArchipelPaymentStatus::Pending
                 | ArchipelPaymentStatus::Accepted => Ok(enums::AttemptStatus::CaptureInitiated),
                 ArchipelPaymentStatus::Refused => Ok(enums::AttemptStatus::CaptureFailed),
@@ -381,7 +378,6 @@ fn get_transaction_status(attempt_status: ArchipelPaymentStatus, payment_case: A
         | ArchipelPaymentCase::MerchantInitiatedTransaction
         | ArchipelPaymentCase::Refund => {
             match attempt_status {
-                ArchipelPaymentStatus::New => Ok(enums::AttemptStatus::Started),
                 ArchipelPaymentStatus::Pending => Ok(enums::AttemptStatus::Authorizing),
                 ArchipelPaymentStatus::Accepted => Ok(enums::AttemptStatus::Authorized),
                 ArchipelPaymentStatus::Refused => Ok(enums::AttemptStatus::AuthorizationFailed),
@@ -390,7 +386,6 @@ fn get_transaction_status(attempt_status: ArchipelPaymentStatus, payment_case: A
         }, 
         ArchipelPaymentCase::Cancel => {
             match attempt_status {
-                ArchipelPaymentStatus::New => Ok(enums::AttemptStatus::Started),
                 ArchipelPaymentStatus::Pending => Ok(enums::AttemptStatus::VoidInitiated),
                 ArchipelPaymentStatus::Accepted => Ok(enums::AttemptStatus::Voided),
                 ArchipelPaymentStatus::Refused => Ok(enums::AttemptStatus::VoidFailed),
@@ -403,8 +398,7 @@ fn get_transaction_status(attempt_status: ArchipelPaymentStatus, payment_case: A
                 ArchipelPaymentStatus::Pending => Ok(enums::AttemptStatus::Pending),
                 ArchipelPaymentStatus::Accepted => Ok(enums::AttemptStatus::Charged),
                 ArchipelPaymentStatus::Refused => Ok(enums::AttemptStatus::RouterDeclined),
-                ArchipelPaymentStatus::New
-                | ArchipelPaymentStatus::Error => Ok(enums::AttemptStatus::Failure)
+                ArchipelPaymentStatus::Error => Ok(enums::AttemptStatus::Failure)
             }
         },
         ArchipelPaymentCase::RefundSync => {
