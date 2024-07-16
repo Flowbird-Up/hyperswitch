@@ -290,7 +290,7 @@ impl ConnectorIntegration<api::PSync,
             .change_context(errors::ConnectorError::MissingConnectorTransactionID)?;
         Ok(format!("{}{}{}", self.base_url(connectors),
                    "Transaction/v1/transactions/",
-                   metadata.transaction_id.unwrap_or(String::new()))
+                   metadata.transaction_id)
         )
     }
 
@@ -404,9 +404,9 @@ impl ConnectorIntegration<api::Capture,
         event_builder: Option<&mut ConnectorEvent>,
         res: Response,
     ) -> CustomResult<types::PaymentsCaptureRouterData, errors::ConnectorError> {
-        let response: archipel::ArchipelCaptureResponse = res
+        let response: archipel::ArchipelPaymentsResponse = res
             .response
-            .parse_struct("ArchipelCaptureResponse")
+            .parse_struct("ArchipelPaymentsResponse")
             .change_context(errors::ConnectorError::ResponseDeserializationFailed)?;
         event_builder.map(|i| i.set_response_body(&response));
         router_env::logger::info!(connector_response=?response);
