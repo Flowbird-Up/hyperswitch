@@ -67,11 +67,13 @@ pm.test(
 );
 
 pm.test(
-  "[POST]::/payments - Payment Attempt has archiepl response 'transactionId' in connector_metadata",
+  "[POST]::/payments - Archiepl response 'transactionId' is updated and not null",
   function () {
-    pm.expect(payment_attempt.connector_metadata.transactionId).to.be.equal(
+    pm.expect(payment_attempt.connector_metadata.transactionId).not.null
+    pm.expect(payment_attempt.connector_metadata.transactionId).to.not.equal(
         pm.collectionVariables.get("archipel_transaction_uuid")
     )
+    pm.collectionVariables.set("archipel_transaction_uuid", payment_attempt.connector_metadata.transactionId)
   },
 );
 

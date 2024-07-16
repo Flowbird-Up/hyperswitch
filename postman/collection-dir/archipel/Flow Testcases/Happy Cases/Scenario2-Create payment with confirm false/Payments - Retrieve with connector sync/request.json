@@ -7,7 +7,7 @@
     }
   ],
   "url": {
-    "raw": "{{baseUrl}}/payments/:id?expand_attempts=true&force_sync=true",
+    "raw": "{{baseUrl}}/payments/:id?expand_attempts=true",
     "host": [
       "{{baseUrl}}"
     ],
@@ -18,10 +18,6 @@
     "query": [
       {
         "key": "expand_attempts",
-        "value": "true"
-      },
-      {
-        "key": "force_sync",
         "value": "true"
       }
     ],
