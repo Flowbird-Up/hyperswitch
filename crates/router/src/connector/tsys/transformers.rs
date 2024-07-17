@@ -5,10 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     connector::utils::{self, CardData, PaymentsAuthorizeRequestData, RefundsRequestData},
     core::errors,
-    types::{
-        self, api, domain,
-        storage::{self, enums},
-    },
+    types::{self, api, domain, storage::enums},
 };
 
 #[derive(Debug, Serialize)]
@@ -25,7 +22,7 @@ pub struct TsysPaymentAuthSaleRequest {
     transaction_key: Secret<String>,
     card_data_source: String,
     transaction_amount: String,
-    currency_code: storage::enums::Currency,
+    currency_code: enums::Currency,
     card_number: cards::CardNumber,
     expiration_date: Secret<String>,
     cvv2: Secret<String>,
@@ -75,6 +72,7 @@ impl TryFrom<&types::PaymentsAuthorizeRouterData> for TsysPaymentsRequest {
             | domain::PaymentMethodData::Crypto(_)
             | domain::PaymentMethodData::MandatePayment
             | domain::PaymentMethodData::Reward
+            | domain::PaymentMethodData::RealTimePayment(_)
             | domain::PaymentMethodData::Upi(_)
             | domain::PaymentMethodData::Voucher(_)
             | domain::PaymentMethodData::GiftCard(_)
@@ -221,6 +219,7 @@ fn get_payments_response(connector_response: TsysResponse) -> types::PaymentsRes
         network_txn_id: None,
         connector_response_reference_id: Some(connector_response.transaction_id),
         incremental_authorization_allowed: None,
+        charge_id: None,
     }
 }
 
@@ -245,6 +244,7 @@ fn get_payments_sync_response(
                 .clone(),
         ),
         incremental_authorization_allowed: None,
+        charge_id: None,
     }
 }
 

@@ -15,20 +15,13 @@ pub struct PayeezyRouterData<T> {
     pub router_data: T,
 }
 
-impl<T>
-    TryFrom<(
-        &types::api::CurrencyUnit,
-        types::storage::enums::Currency,
-        i64,
-        T,
-    )> for PayeezyRouterData<T>
-{
+impl<T> TryFrom<(&api::CurrencyUnit, enums::Currency, i64, T)> for PayeezyRouterData<T> {
     type Error = error_stack::Report<errors::ConnectorError>;
 
     fn try_from(
         (currency_unit, currency, amount, router_data): (
-            &types::api::CurrencyUnit,
-            types::storage::enums::Currency,
+            &api::CurrencyUnit,
+            enums::Currency,
             i64,
             T,
         ),
@@ -141,6 +134,7 @@ impl TryFrom<&PayeezyRouterData<&types::PaymentsAuthorizeRouterData>> for Payeez
             | diesel_models::enums::PaymentMethod::Crypto
             | diesel_models::enums::PaymentMethod::BankDebit
             | diesel_models::enums::PaymentMethod::Reward
+            | diesel_models::enums::PaymentMethod::RealTimePayment
             | diesel_models::enums::PaymentMethod::Upi
             | diesel_models::enums::PaymentMethod::Voucher
             | diesel_models::enums::PaymentMethod::GiftCard => {
@@ -261,6 +255,7 @@ fn get_payment_method_data(
         | domain::PaymentMethodData::Crypto(_)
         | domain::PaymentMethodData::MandatePayment
         | domain::PaymentMethodData::Reward
+        | domain::PaymentMethodData::RealTimePayment(_)
         | domain::PaymentMethodData::Upi(_)
         | domain::PaymentMethodData::Voucher(_)
         | domain::PaymentMethodData::GiftCard(_)
@@ -440,6 +435,7 @@ impl<F, T>
                         .unwrap_or(item.response.transaction_id),
                 ),
                 incremental_authorization_allowed: None,
+                charge_id: None,
             }),
             ..item.data
         })

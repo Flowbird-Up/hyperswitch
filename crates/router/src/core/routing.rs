@@ -9,11 +9,14 @@ use api_models::{
 };
 #[cfg(not(feature = "business_profile_routing"))]
 use common_utils::ext_traits::{Encode, StringExt};
+#[cfg(not(feature = "business_profile_routing"))]
 use diesel_models::configs;
 #[cfg(feature = "business_profile_routing")]
 use diesel_models::routing_algorithm::RoutingAlgorithm;
 use error_stack::ResultExt;
 use rustc_hash::FxHashSet;
+#[cfg(not(feature = "business_profile_routing"))]
+use storage_impl::redis::cache;
 
 use super::payments;
 #[cfg(feature = "payouts")]
@@ -26,7 +29,7 @@ use crate::{
         errors::{RouterResponse, StorageErrorExt},
         metrics, utils as core_utils,
     },
-    routes::AppState,
+    routes::SessionState,
     types::domain,
     utils::{self, OptionExt, ValueExt},
 };
@@ -45,7 +48,7 @@ where
 }
 
 pub async fn retrieve_merchant_routing_dictionary(
-    state: AppState,
+    state: SessionState,
     merchant_account: domain::MerchantAccount,
     #[cfg(feature = "business_profile_routing")] query_params: RoutingRetrieveQuery,
     #[cfg(feature = "business_profile_routing")] transaction_type: &enums::TransactionType,
@@ -92,7 +95,7 @@ pub async fn retrieve_merchant_routing_dictionary(
 }
 
 pub async fn create_routing_config(
-    state: AppState,
+    state: SessionState,
     merchant_account: domain::MerchantAccount,
     key_store: domain::MerchantKeyStore,
     request: routing_types::RoutingConfigRequest,
@@ -231,7 +234,11 @@ pub async fn create_routing_config(
         if records_are_empty {
             merchant_dictionary.active_id = Some(algorithm_id.clone());
             algorithm_ref.update_algorithm_id(algorithm_id);
-            helpers::update_merchant_active_algorithm_ref(db, &key_store, algorithm_ref).await?;
+            let key =
+                cache::CacheKind::Routing(format!("dsl_{}", &merchant_account.merchant_id).into());
+
+            helpers::update_merchant_active_algorithm_ref(db, &key_store, key, algorithm_ref)
+                .await?;
         }
 
         helpers::update_merchant_routing_dictionary(
@@ -247,7 +254,7 @@ pub async fn create_routing_config(
 }
 
 pub async fn link_routing_config(
-    state: AppState,
+    state: SessionState,
     merchant_account: domain::MerchantAccount,
     #[cfg(not(feature = "business_profile_routing"))] key_store: domain::MerchantKeyStore,
     algorithm_id: String,
@@ -362,7 +369,9 @@ pub async fn link_routing_config(
             merchant_dictionary,
         )
         .await?;
-        helpers::update_merchant_active_algorithm_ref(db, &key_store, routing_ref).await?;
+        let key =
+            cache::CacheKind::Routing(format!("dsl_{}", &merchant_account.merchant_id).into());
+        helpers::update_merchant_active_algorithm_ref(db, &key_store, key, routing_ref).await?;
 
         metrics::ROUTING_LINK_CONFIG_SUCCESS_RESPONSE.add(&metrics::CONTEXT, 1, &[]);
         Ok(service_api::ApplicationResponse::Json(response))
@@ -370,7 +379,7 @@ pub async fn link_routing_config(
 }
 
 pub async fn retrieve_routing_config(
-    state: AppState,
+    state: SessionState,
     merchant_account: domain::MerchantAccount,
     algorithm_id: RoutingAlgorithmId,
 ) -> RouterResponse<routing_types::MerchantRoutingAlgorithm> {
@@ -444,7 +453,7 @@ pub async fn retrieve_routing_config(
     }
 }
 pub async fn unlink_routing_config(
-    state: AppState,
+    state: SessionState,
     merchant_account: domain::MerchantAccount,
     #[cfg(not(feature = "business_profile_routing"))] key_store: domain::MerchantKeyStore,
     #[cfg(feature = "business_profile_routing")] request: routing_types::RoutingConfigRequest,
@@ -612,6 +621,7 @@ pub async fn unlink_routing_config(
             payout_routing_algorithm: None,
             default_profile: None,
             payment_link_config: None,
+            pm_collect_link_config: None,
         };
 
         db.update_specific_fields_in_merchant(
@@ -629,7 +639,7 @@ pub async fn unlink_routing_config(
 }
 
 pub async fn update_default_routing_config(
-    state: AppState,
+    state: SessionState,
     merchant_account: domain::MerchantAccount,
     updated_config: Vec<routing_types::RoutableConnectorChoice>,
     transaction_type: &enums::TransactionType,
@@ -678,7 +688,7 @@ pub async fn update_default_routing_config(
 }
 
 pub async fn retrieve_default_routing_config(
-    state: AppState,
+    state: SessionState,
     merchant_account: domain::MerchantAccount,
     transaction_type: &enums::TransactionType,
 ) -> RouterResponse<Vec<routing_types::RoutableConnectorChoice>> {
@@ -698,7 +708,7 @@ pub async fn retrieve_default_routing_config(
 }
 
 pub async fn retrieve_linked_routing_config(
-    state: AppState,
+    state: SessionState,
     merchant_account: domain::MerchantAccount,
     #[cfg(feature = "business_profile_routing")] query_params: RoutingRetrieveLinkQuery,
     #[cfg(feature = "business_profile_routing")] transaction_type: &enums::TransactionType,
@@ -806,39 +816,8 @@ pub async fn retrieve_linked_routing_config(
     }
 }
 
-pub async fn upsert_connector_agnostic_mandate_config(
-    state: AppState,
-    business_profile_id: &str,
-    mandate_config: routing_types::DetailedConnectorChoice,
-) -> RouterResponse<routing_types::DetailedConnectorChoice> {
-    let key = helpers::get_pg_agnostic_mandate_config_key(business_profile_id);
-
-    let mandate_config_str = mandate_config.enabled.to_string();
-
-    let find_config = state
-        .store
-        .find_config_by_key_unwrap_or(&key, Some(mandate_config_str.clone()))
-        .await
-        .change_context(errors::ApiErrorResponse::InternalServerError)
-        .attach_printable("error saving pg agnostic mandate config to db")?;
-
-    if find_config.config != mandate_config_str {
-        let config_update = configs::ConfigUpdate::Update {
-            config: Some(mandate_config_str),
-        };
-        state
-            .store
-            .update_config_by_key(&key, config_update)
-            .await
-            .change_context(errors::ApiErrorResponse::InternalServerError)
-            .attach_printable("error saving pg agnostic mandate config to db")?;
-    }
-
-    Ok(service_api::ApplicationResponse::Json(mandate_config))
-}
-
 pub async fn retrieve_default_routing_config_for_profiles(
-    state: AppState,
+    state: SessionState,
     merchant_account: domain::MerchantAccount,
     transaction_type: &enums::TransactionType,
 ) -> RouterResponse<Vec<routing_types::ProfileDefaultRoutingConfig>> {
@@ -877,7 +856,7 @@ pub async fn retrieve_default_routing_config_for_profiles(
 }
 
 pub async fn update_default_routing_config_for_profile(
-    state: AppState,
+    state: SessionState,
     merchant_account: domain::MerchantAccount,
     updated_config: Vec<routing_types::RoutableConnectorChoice>,
     profile_id: String,

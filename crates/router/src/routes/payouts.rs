@@ -70,7 +70,8 @@ pub async fn payouts_retrieve(
 ) -> HttpResponse {
     let payout_retrieve_request = payout_types::PayoutRetrieveRequest {
         payout_id: path.into_inner(),
-        force_sync: query_params.force_sync,
+        force_sync: query_params.force_sync.to_owned(),
+        merchant_id: query_params.merchant_id.to_owned(),
     };
     let flow = Flow::PayoutsRetrieve;
     Box::pin(api::server_wrap(
@@ -126,6 +127,39 @@ pub async fn payouts_update(
             payouts_update_core(state, auth.merchant_account, auth.key_store, req)
         },
         &auth::ApiKeyAuth,
+        api_locking::LockAction::NotApplicable,
+    ))
+    .await
+}
+
+#[instrument(skip_all, fields(flow = ?Flow::PayoutsConfirm))]
+pub async fn payouts_confirm(
+    state: web::Data<AppState>,
+    req: HttpRequest,
+    json_payload: web::Json<payout_types::PayoutCreateRequest>,
+    path: web::Path<String>,
+) -> HttpResponse {
+    let flow = Flow::PayoutsConfirm;
+    let mut payload = json_payload.into_inner();
+    let payout_id = path.into_inner();
+    tracing::Span::current().record("payout_id", &payout_id);
+    payload.payout_id = Some(payout_id);
+    payload.confirm = Some(true);
+    let (auth_type, _auth_flow) =
+        match auth::check_client_secret_and_get_auth(req.headers(), &payload) {
+            Ok(auth) => auth,
+            Err(e) => return api::log_and_return_error_response(e),
+        };
+
+    Box::pin(api::server_wrap(
+        flow,
+        state,
+        &req,
+        payload,
+        |state, auth, req, _| {
+            payouts_confirm_core(state, auth.merchant_account, auth.key_store, req)
+        },
+        &*auth_type,
         api_locking::LockAction::NotApplicable,
     ))
     .await

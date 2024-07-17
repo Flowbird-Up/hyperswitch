@@ -19,22 +19,10 @@ pub struct HelcimRouterData<T> {
     pub router_data: T,
 }
 
-impl<T>
-    TryFrom<(
-        &types::api::CurrencyUnit,
-        types::storage::enums::Currency,
-        i64,
-        T,
-    )> for HelcimRouterData<T>
-{
+impl<T> TryFrom<(&api::CurrencyUnit, enums::Currency, i64, T)> for HelcimRouterData<T> {
     type Error = error_stack::Report<errors::ConnectorError>;
     fn try_from(
-        (currency_unit, currency, amount, item): (
-            &types::api::CurrencyUnit,
-            types::storage::enums::Currency,
-            i64,
-            T,
-        ),
+        (currency_unit, currency, amount, item): (&api::CurrencyUnit, enums::Currency, i64, T),
     ) -> Result<Self, Self::Error> {
         let amount = utils::get_amount_as_f64(currency_unit, amount, currency)?;
         Ok(Self {
@@ -45,9 +33,9 @@ impl<T>
 }
 
 pub fn check_currency(
-    currency: types::storage::enums::Currency,
-) -> Result<types::storage::enums::Currency, errors::ConnectorError> {
-    if currency == types::storage::enums::Currency::USD {
+    currency: enums::Currency,
+) -> Result<enums::Currency, errors::ConnectorError> {
+    if currency == enums::Currency::USD {
         Ok(currency)
     } else {
         Err(errors::ConnectorError::NotSupported {
@@ -171,6 +159,7 @@ impl TryFrom<&types::SetupMandateRouterData> for HelcimVerifyRequest {
             | domain::PaymentMethodData::Crypto(_)
             | domain::PaymentMethodData::MandatePayment
             | domain::PaymentMethodData::Reward
+            | domain::PaymentMethodData::RealTimePayment(_)
             | domain::PaymentMethodData::Upi(_)
             | domain::PaymentMethodData::Voucher(_)
             | domain::PaymentMethodData::GiftCard(_)
@@ -272,6 +261,7 @@ impl TryFrom<&HelcimRouterData<&types::PaymentsAuthorizeRouterData>> for HelcimP
             | domain::PaymentMethodData::Crypto(_)
             | domain::PaymentMethodData::MandatePayment
             | domain::PaymentMethodData::Reward
+            | domain::PaymentMethodData::RealTimePayment(_)
             | domain::PaymentMethodData::Upi(_)
             | domain::PaymentMethodData::Voucher(_)
             | domain::PaymentMethodData::GiftCard(_)
@@ -381,6 +371,7 @@ impl<F>
                 network_txn_id: None,
                 connector_response_reference_id: item.response.invoice_number.clone(),
                 incremental_authorization_allowed: None,
+                charge_id: None,
             }),
             status: enums::AttemptStatus::from(item.response),
             ..item.data
@@ -436,6 +427,7 @@ impl<F>
                 network_txn_id: None,
                 connector_response_reference_id: item.response.invoice_number.clone(),
                 incremental_authorization_allowed: None,
+                charge_id: None,
             }),
             status: enums::AttemptStatus::from(item.response),
             ..item.data
@@ -495,6 +487,7 @@ impl<F>
                     network_txn_id: None,
                     connector_response_reference_id: item.response.invoice_number.clone(),
                     incremental_authorization_allowed: None,
+                    charge_id: None,
                 }),
                 status: enums::AttemptStatus::from(item.response),
                 ..item.data
@@ -581,6 +574,7 @@ impl<F>
                 network_txn_id: None,
                 connector_response_reference_id: item.response.invoice_number.clone(),
                 incremental_authorization_allowed: None,
+                charge_id: None,
             }),
             status: enums::AttemptStatus::from(item.response),
             ..item.data
@@ -643,6 +637,7 @@ impl<F>
                 network_txn_id: None,
                 connector_response_reference_id: item.response.invoice_number.clone(),
                 incremental_authorization_allowed: None,
+                charge_id: None,
             }),
             status: enums::AttemptStatus::from(item.response),
             ..item.data

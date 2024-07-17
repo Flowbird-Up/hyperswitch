@@ -12,12 +12,12 @@ impl ConnectorActions for CashtocodeTest {}
 impl utils::Connector for CashtocodeTest {
     fn get_data(&self) -> types::api::ConnectorData {
         use router::connector::Cashtocode;
-        types::api::ConnectorData {
-            connector: Box::new(&Cashtocode),
-            connector_name: types::Connector::Cashtocode,
-            get_token: types::api::GetToken::Connector,
-            merchant_connector_id: None,
-        }
+        utils::construct_connector_data_old(
+            Box::new(Cashtocode::new()),
+            types::Connector::Cashtocode,
+            types::api::GetToken::Connector,
+            None,
+        )
     }
 
     fn get_auth_token(&self) -> types::ConnectorAuthType {
@@ -39,7 +39,7 @@ static CONNECTOR: CashtocodeTest = CashtocodeTest {};
 impl CashtocodeTest {
     fn get_payment_authorize_data(
         payment_method_type: Option<enums::PaymentMethodType>,
-        payment_method_data: types::domain::PaymentMethodData,
+        payment_method_data: domain::PaymentMethodData,
     ) -> Option<types::PaymentsAuthorizeData> {
         Some(types::PaymentsAuthorizeData {
             amount: 1000,
@@ -72,6 +72,7 @@ impl CashtocodeTest {
             metadata: None,
             authentication_data: None,
             customer_acceptance: None,
+            ..utils::PaymentAuthorizeType::default().0
         })
     }
 
@@ -87,6 +88,7 @@ impl CashtocodeTest {
                     phone: None,
                     email: None,
                 }),
+                None,
                 None,
             )),
             return_url: Some("https://google.com".to_owned()),

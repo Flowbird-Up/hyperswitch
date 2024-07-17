@@ -155,7 +155,7 @@ impl ConnectorCommon for Braintree {
             Err(error_msg) => {
                 event_builder.map(|event| event.set_error(serde_json::json!({"error": res.response.escape_ascii().to_string(), "status_code": res.status_code})));
                 logger::error!(deserialization_error =? error_msg);
-                utils::handle_json_response_deserialization_failure(res, "braintree".to_owned())
+                utils::handle_json_response_deserialization_failure(res, "braintree")
             }
         }
     }
@@ -1467,10 +1467,8 @@ impl api::IncomingWebhook for Braintree {
 
         match response.dispute {
             Some(dispute_data) => {
-                let currency = diesel_models::enums::Currency::from_str(
-                    dispute_data.currency_iso_code.as_str(),
-                )
-                .change_context(errors::ConnectorError::WebhookBodyDecodingFailed)?;
+                let currency = enums::Currency::from_str(dispute_data.currency_iso_code.as_str())
+                    .change_context(errors::ConnectorError::WebhookBodyDecodingFailed)?;
                 Ok(api::disputes::DisputePayload {
                     amount: connector_utils::to_currency_lower_unit(
                         dispute_data.amount_disputed.to_string(),

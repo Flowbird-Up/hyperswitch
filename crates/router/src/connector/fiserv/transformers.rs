@@ -18,20 +18,13 @@ pub struct FiservRouterData<T> {
     pub router_data: T,
 }
 
-impl<T>
-    TryFrom<(
-        &types::api::CurrencyUnit,
-        types::storage::enums::Currency,
-        i64,
-        T,
-    )> for FiservRouterData<T>
-{
+impl<T> TryFrom<(&api::CurrencyUnit, enums::Currency, i64, T)> for FiservRouterData<T> {
     type Error = error_stack::Report<errors::ConnectorError>;
 
     fn try_from(
         (currency_unit, currency, amount, router_data): (
-            &types::api::CurrencyUnit,
-            types::storage::enums::Currency,
+            &api::CurrencyUnit,
+            enums::Currency,
             i64,
             T,
         ),
@@ -191,6 +184,7 @@ impl TryFrom<&FiservRouterData<&types::PaymentsAuthorizeRouterData>> for FiservP
             | domain::PaymentMethodData::Crypto(_)
             | domain::PaymentMethodData::MandatePayment
             | domain::PaymentMethodData::Reward
+            | domain::PaymentMethodData::RealTimePayment(_)
             | domain::PaymentMethodData::Upi(_)
             | domain::PaymentMethodData::Voucher(_)
             | domain::PaymentMethodData::GiftCard(_)
@@ -377,6 +371,7 @@ impl<F, T>
                     gateway_resp.transaction_processing_details.order_id,
                 ),
                 incremental_authorization_allowed: None,
+                charge_id: None,
             }),
             ..item.data
         })
@@ -392,7 +387,7 @@ impl<F, T> TryFrom<types::ResponseRouterData<F, FiservSyncResponse, T, types::Pa
     ) -> Result<Self, Self::Error> {
         let gateway_resp = match item.response.sync_responses.first() {
             Some(gateway_response) => gateway_response,
-            _ => Err(errors::ConnectorError::ResponseHandlingFailed)?,
+            None => Err(errors::ConnectorError::ResponseHandlingFailed)?,
         };
 
         Ok(Self {
@@ -419,6 +414,7 @@ impl<F, T> TryFrom<types::ResponseRouterData<F, FiservSyncResponse, T, types::Pa
                         .clone(),
                 ),
                 incremental_authorization_allowed: None,
+                charge_id: None,
             }),
             ..item.data
         })

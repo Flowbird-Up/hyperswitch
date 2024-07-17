@@ -15,23 +15,23 @@ impl ConnectorActions for AdyenTest {}
 impl utils::Connector for AdyenTest {
     fn get_data(&self) -> types::api::ConnectorData {
         use router::connector::Adyen;
-        types::api::ConnectorData {
-            connector: Box::new(&Adyen),
-            connector_name: types::Connector::Adyen,
-            get_token: types::api::GetToken::Connector,
-            merchant_connector_id: None,
-        }
+        utils::construct_connector_data_old(
+            Box::new(&Adyen),
+            types::Connector::Adyen,
+            types::api::GetToken::Connector,
+            None,
+        )
     }
 
     #[cfg(feature = "payouts")]
     fn get_payout_data(&self) -> Option<types::api::ConnectorData> {
         use router::connector::Adyen;
-        Some(types::api::ConnectorData {
-            connector: Box::new(&Adyen),
-            connector_name: types::Connector::Adyen,
-            get_token: types::api::GetToken::Connector,
-            merchant_connector_id: None,
-        })
+        Some(utils::construct_connector_data_old(
+            Box::new(&Adyen),
+            types::Connector::Adyen,
+            types::api::GetToken::Connector,
+            None,
+        ))
     }
 
     fn get_auth_token(&self) -> types::ConnectorAuthType {
@@ -66,11 +66,12 @@ impl AdyenTest {
                         last_name: Some(Secret::new("Dough".to_string())),
                     }),
                     phone: Some(PhoneDetails {
-                        number: Some(Secret::new("8056594427".to_string())),
+                        number: Some(Secret::new("9123456789".to_string())),
                         country_code: Some("+351".to_string()),
                     }),
                     email: None,
                 }),
+                None,
                 None,
             )),
             ..Default::default()
@@ -82,7 +83,6 @@ impl AdyenTest {
         use common_utils::pii::Email;
 
         Some(PaymentInfo {
-            country: Some(api_models::enums::CountryAlpha2::NL),
             currency: Some(enums::Currency::EUR),
             address: Some(PaymentAddress::new(
                 None,
@@ -99,6 +99,7 @@ impl AdyenTest {
                     phone: None,
                     email: None,
                 }),
+                None,
                 None,
             )),
             payout_method_data: match payout_type {
@@ -122,6 +123,8 @@ impl AdyenTest {
                 enums::PayoutType::Wallet => Some(types::api::PayoutMethodData::Wallet(
                     types::api::payouts::WalletPayout::Paypal(api_models::payouts::Paypal {
                         email: Email::from_str("EmailUsedForPayPalAccount@example.com").ok(),
+                        telephone_number: None,
+                        paypal_id: None,
                     }),
                 )),
             },
@@ -149,7 +152,7 @@ impl AdyenTest {
                 card_type: None,
                 card_issuing_country: None,
                 bank_code: None,
-                nick_name: Some(masking::Secret::new("nick_name".into())),
+                nick_name: Some(Secret::new("nick_name".into())),
             }),
             confirm: true,
             statement_descriptor_suffix: None,
@@ -178,6 +181,7 @@ impl AdyenTest {
             metadata: None,
             authentication_data: None,
             customer_acceptance: None,
+            ..utils::PaymentAuthorizeType::default().0
         })
     }
 }

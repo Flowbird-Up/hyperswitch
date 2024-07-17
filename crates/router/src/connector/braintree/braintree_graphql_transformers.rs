@@ -27,22 +27,10 @@ pub struct BraintreeRouterData<T> {
     pub router_data: T,
 }
 
-impl<T>
-    TryFrom<(
-        &types::api::CurrencyUnit,
-        types::storage::enums::Currency,
-        i64,
-        T,
-    )> for BraintreeRouterData<T>
-{
+impl<T> TryFrom<(&api::CurrencyUnit, enums::Currency, i64, T)> for BraintreeRouterData<T> {
     type Error = error_stack::Report<errors::ConnectorError>;
     fn try_from(
-        (currency_unit, currency, amount, item): (
-            &types::api::CurrencyUnit,
-            types::storage::enums::Currency,
-            i64,
-            T,
-        ),
+        (currency_unit, currency, amount, item): (&api::CurrencyUnit, enums::Currency, i64, T),
     ) -> Result<Self, Self::Error> {
         let amount = utils::get_amount_as_string(currency_unit, amount, currency)?;
         Ok(Self {
@@ -80,7 +68,7 @@ pub enum BraintreePaymentsRequest {
 #[derive(Debug, Deserialize)]
 pub struct BraintreeMeta {
     merchant_account_id: Secret<String>,
-    merchant_config_currency: types::storage::enums::Currency,
+    merchant_config_currency: enums::Currency,
 }
 
 impl TryFrom<&Option<pii::SecretSerdeValue>> for BraintreeMeta {
@@ -137,6 +125,7 @@ impl TryFrom<&BraintreeRouterData<&types::PaymentsAuthorizeRouterData>>
             | domain::PaymentMethodData::Crypto(_)
             | domain::PaymentMethodData::MandatePayment
             | domain::PaymentMethodData::Reward
+            | domain::PaymentMethodData::RealTimePayment(_)
             | domain::PaymentMethodData::Upi(_)
             | domain::PaymentMethodData::Voucher(_)
             | domain::PaymentMethodData::GiftCard(_)
@@ -169,6 +158,7 @@ impl TryFrom<&BraintreeRouterData<&types::PaymentsCompleteAuthorizeRouterData>>
             | api_models::enums::PaymentMethod::Crypto
             | api_models::enums::PaymentMethod::BankDebit
             | api_models::enums::PaymentMethod::Reward
+            | api_models::enums::PaymentMethod::RealTimePayment
             | api_models::enums::PaymentMethod::Upi
             | api_models::enums::PaymentMethod::Voucher
             | api_models::enums::PaymentMethod::GiftCard => {
@@ -257,6 +247,7 @@ impl<F>
                         network_txn_id: None,
                         connector_response_reference_id: None,
                         incremental_authorization_allowed: None,
+                        charge_id: None,
                     }),
                     ..item.data
                 })
@@ -275,6 +266,7 @@ impl<F>
                     network_txn_id: None,
                     connector_response_reference_id: None,
                     incremental_authorization_allowed: None,
+                    charge_id: None,
                 }),
                 ..item.data
             }),
@@ -439,6 +431,7 @@ impl<F>
                         network_txn_id: None,
                         connector_response_reference_id: None,
                         incremental_authorization_allowed: None,
+                        charge_id: None,
                     }),
                     ..item.data
                 })
@@ -457,6 +450,7 @@ impl<F>
                     network_txn_id: None,
                     connector_response_reference_id: None,
                     incremental_authorization_allowed: None,
+                    charge_id: None,
                 }),
                 ..item.data
             }),
@@ -501,6 +495,7 @@ impl<F>
                         network_txn_id: None,
                         connector_response_reference_id: None,
                         incremental_authorization_allowed: None,
+                        charge_id: None,
                     }),
                     ..item.data
                 })
@@ -546,6 +541,7 @@ impl<F>
                         network_txn_id: None,
                         connector_response_reference_id: None,
                         incremental_authorization_allowed: None,
+                        charge_id: None,
                     }),
                     ..item.data
                 })
@@ -887,6 +883,7 @@ impl TryFrom<&types::TokenizationRouterData> for BraintreeTokenRequest {
             | domain::PaymentMethodData::Crypto(_)
             | domain::PaymentMethodData::MandatePayment
             | domain::PaymentMethodData::Reward
+            | domain::PaymentMethodData::RealTimePayment(_)
             | domain::PaymentMethodData::Upi(_)
             | domain::PaymentMethodData::Voucher(_)
             | domain::PaymentMethodData::GiftCard(_)
@@ -1074,6 +1071,7 @@ impl TryFrom<types::PaymentsCaptureResponseRouterData<BraintreeCaptureResponse>>
                         network_txn_id: None,
                         connector_response_reference_id: None,
                         incremental_authorization_allowed: None,
+                        charge_id: None,
                     }),
                     ..item.data
                 })
@@ -1172,6 +1170,7 @@ impl<F, T>
                         network_txn_id: None,
                         connector_response_reference_id: None,
                         incremental_authorization_allowed: None,
+                        charge_id: None,
                     }),
                     ..item.data
                 })
@@ -1270,6 +1269,7 @@ impl<F, T>
                         network_txn_id: None,
                         connector_response_reference_id: None,
                         incremental_authorization_allowed: None,
+                        charge_id: None,
                     }),
                     ..item.data
                 })
@@ -1336,7 +1336,7 @@ impl
             variables: VariablePaymentInput {
                 input: PaymentInput {
                     payment_method_id: match item.router_data.get_payment_method_token()? {
-                        types::PaymentMethodToken::Token(token) => token.into(),
+                        types::PaymentMethodToken::Token(token) => token,
                         types::PaymentMethodToken::ApplePayDecrypt(_) => Err(
                             unimplemented_payment_method!("Apple Pay", "Simplified", "Braintree"),
                         )?,
@@ -1417,7 +1417,7 @@ fn get_braintree_redirect_form(
             .client_token
             .expose(),
         card_token: match payment_method_token {
-            types::PaymentMethodToken::Token(token) => token,
+            types::PaymentMethodToken::Token(token) => token.expose(),
             types::PaymentMethodToken::ApplePayDecrypt(_) => Err(unimplemented_payment_method!(
                 "Apple Pay",
                 "Simplified",
@@ -1437,6 +1437,7 @@ fn get_braintree_redirect_form(
             | domain::PaymentMethodData::Crypto(_)
             | domain::PaymentMethodData::MandatePayment
             | domain::PaymentMethodData::Reward
+            | domain::PaymentMethodData::RealTimePayment(_)
             | domain::PaymentMethodData::Upi(_)
             | domain::PaymentMethodData::Voucher(_)
             | domain::PaymentMethodData::GiftCard(_)

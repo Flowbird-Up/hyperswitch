@@ -20,18 +20,13 @@ pub struct PlacetopayRouterData<T> {
     pub router_data: T,
 }
 
-impl<T>
-    TryFrom<(
-        &types::api::CurrencyUnit,
-        types::storage::enums::Currency,
-        i64,
-        T,
-    )> for PlacetopayRouterData<T>
+impl<T> TryFrom<(&api::CurrencyUnit, types::storage::enums::Currency, i64, T)>
+    for PlacetopayRouterData<T>
 {
     type Error = error_stack::Report<errors::ConnectorError>;
     fn try_from(
         (_currency_unit, _currency, amount, item): (
-            &types::api::CurrencyUnit,
+            &api::CurrencyUnit,
             types::storage::enums::Currency,
             i64,
             T,
@@ -152,6 +147,7 @@ impl TryFrom<&PlacetopayRouterData<&types::PaymentsAuthorizeRouterData>>
             | domain::PaymentMethodData::Crypto(_)
             | domain::PaymentMethodData::MandatePayment
             | domain::PaymentMethodData::Reward
+            | domain::PaymentMethodData::RealTimePayment(_)
             | domain::PaymentMethodData::Upi(_)
             | domain::PaymentMethodData::Voucher(_)
             | domain::PaymentMethodData::GiftCard(_)
@@ -284,6 +280,7 @@ impl<F, T>
                 network_txn_id: None,
                 connector_response_reference_id: None,
                 incremental_authorization_allowed: None,
+                charge_id: None,
             }),
             ..item.data
         })

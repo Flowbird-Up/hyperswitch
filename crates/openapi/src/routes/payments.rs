@@ -35,7 +35,7 @@
                     "customer": {
                       "id": "cus_abcdefgh",
                       "name": "John Dough",
-                      "phone": "9999999999",
+                      "phone": "9123456789",
                       "email": "john@example.com"
                     },
                     "description": "Its my first payment request",
@@ -181,7 +181,7 @@
                         "last_name": "Doe"
                       },
                       "phone": {
-                        "number": "8056594427",
+                        "number": "9123456789",
                         "country_code": "+91"
                       }
                     }
@@ -257,7 +257,7 @@ pub fn payments_retrieve() {}
                     "last_name": "Doe"
                 },
                 "phone": {
-                    "number": "8056594427",
+                    "number": "9123456789",
                     "country_code": "+91"
                 }
               },
@@ -486,3 +486,23 @@ pub fn payments_incremental_authorization() {}
   security(("publishable_key" = []))
 )]
 pub fn payments_external_authentication() {}
+
+/// Payments - Complete Authorize
+///
+///
+#[utoipa::path(
+  post,
+  path = "/{payment_id}/complete_authorize",
+  request_body=PaymentsCompleteAuthorizeRequest,
+  params(
+    ("payment_id" =String, Path, description =  "The identifier for payment")
+  ),
+ responses(
+      (status = 200, description = "Payments Complete Authorize Success", body = PaymentsResponse),
+      (status = 400, description = "Missing mandatory fields")
+  ),
+  tag = "Payments",
+  operation_id = "Complete Authorize a Payment",
+  security(("publishable_key" = []))
+)]
+pub fn payments_complete_authorize() {}

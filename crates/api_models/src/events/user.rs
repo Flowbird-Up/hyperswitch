@@ -10,18 +10,22 @@ use crate::user::{
     dashboard_metadata::{
         GetMetaDataRequest, GetMetaDataResponse, GetMultipleMetaDataPayload, SetMetaDataRequest,
     },
-    AcceptInviteFromEmailRequest, AuthorizeResponse, ChangePasswordRequest, ConnectAccountRequest,
-    CreateInternalUserRequest, DashboardEntryResponse, ForgotPasswordRequest,
-    GetUserDetailsRequest, GetUserDetailsResponse, InviteUserRequest, InviteUserResponse,
-    ListUsersResponse, ReInviteUserRequest, ResetPasswordRequest, SendVerifyEmailRequest,
-    SignInResponse, SignUpRequest, SignUpWithMerchantIdRequest, SwitchMerchantIdRequest,
-    UpdateUserAccountDetailsRequest, UserMerchantCreate, VerifyEmailRequest,
+    AcceptInviteFromEmailRequest, AuthSelectRequest, AuthorizeResponse, BeginTotpResponse,
+    ChangePasswordRequest, ConnectAccountRequest, CreateInternalUserRequest,
+    CreateUserAuthenticationMethodRequest, DashboardEntryResponse, ForgotPasswordRequest,
+    GetSsoAuthUrlRequest, GetUserAuthenticationMethodsRequest, GetUserDetailsResponse,
+    GetUserRoleDetailsRequest, GetUserRoleDetailsResponse, InviteUserRequest, ListUsersResponse,
+    ReInviteUserRequest, RecoveryCodes, ResetPasswordRequest, RotatePasswordRequest,
+    SendVerifyEmailRequest, SignInResponse, SignUpRequest, SignUpWithMerchantIdRequest,
+    SsoSignInRequest, SwitchMerchantIdRequest, TokenOrPayloadResponse, TokenResponse,
+    TwoFactorAuthStatusResponse, UpdateUserAccountDetailsRequest,
+    UpdateUserAuthenticationMethodRequest, UserFromEmailRequest, UserMerchantCreate,
+    VerifyEmailRequest, VerifyRecoveryCodeRequest, VerifyTotpRequest,
 };
 
 impl ApiEventMetric for DashboardEntryResponse {
     fn get_api_event_type(&self) -> Option<ApiEventsType> {
         Some(ApiEventsType::User {
-            merchant_id: self.merchant_id.clone(),
             user_id: self.user_id.clone(),
         })
     }
@@ -31,9 +35,14 @@ impl ApiEventMetric for DashboardEntryResponse {
 impl ApiEventMetric for VerifyTokenResponse {
     fn get_api_event_type(&self) -> Option<ApiEventsType> {
         Some(ApiEventsType::User {
-            merchant_id: self.merchant_id.clone(),
             user_id: self.user_email.peek().to_string(),
         })
+    }
+}
+
+impl<T> ApiEventMetric for TokenOrPayloadResponse<T> {
+    fn get_api_event_type(&self) -> Option<ApiEventsType> {
+        Some(ApiEventsType::Miscellaneous)
     }
 }
 
@@ -53,16 +62,30 @@ common_utils::impl_misc_api_event_type!(
     ConnectAccountRequest,
     ForgotPasswordRequest,
     ResetPasswordRequest,
+    RotatePasswordRequest,
     InviteUserRequest,
-    InviteUserResponse,
     ReInviteUserRequest,
     VerifyEmailRequest,
     SendVerifyEmailRequest,
     AcceptInviteFromEmailRequest,
     SignInResponse,
     UpdateUserAccountDetailsRequest,
-    GetUserDetailsRequest,
-    GetUserDetailsResponse
+    GetUserDetailsResponse,
+    GetUserRoleDetailsRequest,
+    GetUserRoleDetailsResponse,
+    TokenResponse,
+    TwoFactorAuthStatusResponse,
+    UserFromEmailRequest,
+    BeginTotpResponse,
+    VerifyRecoveryCodeRequest,
+    VerifyTotpRequest,
+    RecoveryCodes,
+    GetUserAuthenticationMethodsRequest,
+    CreateUserAuthenticationMethodRequest,
+    UpdateUserAuthenticationMethodRequest,
+    GetSsoAuthUrlRequest,
+    SsoSignInRequest,
+    AuthSelectRequest
 );
 
 #[cfg(feature = "dummy_connector")]
