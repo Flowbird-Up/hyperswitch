@@ -11,6 +11,7 @@ mod adyen;
 mod adyenplatform;
 mod airwallex;
 mod authorizedotnet;
+mod archipel;
 mod bambora;
 mod bamboraapac;
 #[cfg(feature = "dummy_connector")]
