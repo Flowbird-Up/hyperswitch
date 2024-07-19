@@ -4,7 +4,7 @@ use std::{collections::HashMap, str::FromStr, sync::Arc};
 use actix_web::{dev::Server, web, Scope};
 use api_models::health_check::SchedulerHealthCheckResponse;
 use common_utils::ext_traits::{OptionExt, StringExt};
-use diesel_models::process_tracker as storage;
+use diesel_models::process_tracker::{self as storage, business_status};
 use error_stack::ResultExt;
 use router::{
     configs::settings::{CmdLineConf, Settings},
@@ -116,7 +116,8 @@ pub async fn start_web_server(
     let web_server = actix_web::HttpServer::new(move || {
         actix_web::App::new().service(Health::server(state.clone(), service.clone()))
     })
-    .bind((server.host.as_str(), server.port))?
+    .bind((server.host.as_str(), server.port))
+    .change_context(ApplicationError::ConfigurationError)?
     .workers(server.workers)
     .run();
     let _ = web_server.handle();
@@ -310,6 +311,9 @@ impl ProcessTrackerWorkflows<routes::SessionState> for WorkflowRunner {
                         )
                     }
                 }
+                storage::ProcessTrackerRunner::PaymentMethodStatusUpdateWorkflow => Ok(Box::new(
+                    workflows::payment_method_status_update::PaymentMethodStatusUpdateWorkflow,
+                )),
             }
         };
 
@@ -325,14 +329,21 @@ impl ProcessTrackerWorkflows<routes::SessionState> for WorkflowRunner {
             {
                 Ok(_) => (),
                 Err(error) => {
-                    logger::error!(%error, "Failed while handling error");
+                    logger::error!(?error, "Failed while handling error");
                     let status = state
                         .get_db()
                         .as_scheduler()
-                        .finish_process_with_business_status(process, "GLOBAL_FAILURE".to_string())
+                        .finish_process_with_business_status(
+                            process,
+                            business_status::GLOBAL_FAILURE,
+                        )
                         .await;
-                    if let Err(err) = status {
-                        logger::error!(%err, "Failed while performing database operation: GLOBAL_FAILURE");
+                    if let Err(error) = status {
+                        logger::error!(
+                            ?error,
+                            "Failed while performing database operation: {}",
+                            business_status::GLOBAL_FAILURE
+                        );
                     }
                 }
             },

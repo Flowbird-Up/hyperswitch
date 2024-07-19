@@ -1,5 +1,10 @@
+use common_utils::consts::MAX_ALLOWED_MERCHANT_NAME_LENGTH;
+
 pub const MAX_NAME_LENGTH: usize = 70;
-pub const MAX_COMPANY_NAME_LENGTH: usize = 70;
+
+/// The max length of company name and merchant should be same
+/// because we are deriving the merchant name from company name
+pub const MAX_COMPANY_NAME_LENGTH: usize = MAX_ALLOWED_MERCHANT_NAME_LENGTH;
 pub const BUSINESS_EMAIL: &str = "biz@hyperswitch.io";
 
 pub const RECOVERY_CODES_COUNT: usize = 8;
@@ -19,3 +24,6 @@ pub const REDIS_TOTP_PREFIX: &str = "TOTP_";
 pub const REDIS_RECOVERY_CODE_PREFIX: &str = "RC_";
 pub const REDIS_TOTP_SECRET_PREFIX: &str = "TOTP_SEC_";
 pub const REDIS_TOTP_SECRET_TTL_IN_SECS: i64 = 15 * 60; // 15 minutes
+
+pub const REDIS_SSO_PREFIX: &str = "SSO_";
+pub const REDIS_SSO_TTL: i64 = 5 * 60; // 5 minutes

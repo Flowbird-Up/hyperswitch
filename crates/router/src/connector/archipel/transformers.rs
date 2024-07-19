@@ -265,7 +265,8 @@ impl TryFrom<&ArchipelRouterData<&types::PaymentsAuthorizeRouterData>> for Archi
             | domain::PaymentMethodData::Upi(_)
             | domain::PaymentMethodData::Voucher(_)
             | domain::PaymentMethodData::GiftCard(_)
-            | domain::PaymentMethodData::CardToken(_) => {
+            | domain::PaymentMethodData::CardToken(_)
+            | domain::PaymentMethodData::RealTimePayment(_) => {
                Err(errors::ConnectorError::NotImplemented(
                    utils::get_unimplemented_payment_method_error_message("Archipel"),
                ))?

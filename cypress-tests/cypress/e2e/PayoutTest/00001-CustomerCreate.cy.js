@@ -1,4 +1,4 @@
-import customerCreateBody from "../../fixtures/create-customer-body.json";
+import * as fixtures from "../../fixtures/imports";
 import State from "../../utils/State";
 
 let globalState;
@@ -9,10 +9,12 @@ describe("Customer Create flow test", () => {
       globalState = new State(state);
     });
   });
+
   after("flush global state", () => {
     cy.task("setGlobalState", globalState.data);
   });
+
   it("customer-create-call-test", () => {
-    cy.createCustomerCallTest(customerCreateBody, globalState);
+    cy.createCustomerCallTest(fixtures.customerCreateBody, globalState);
   });
 });

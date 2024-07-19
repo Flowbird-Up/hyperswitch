@@ -1,4 +1,4 @@
-import createConnectorBody from "../../fixtures/create-connector-body.json";
+import * as fixtures from "../../fixtures/imports";
 import State from "../../utils/State";
 
 let globalState;
@@ -6,16 +6,14 @@ describe("Connector Account Create flow test", () => {
   before("seed global state", () => {
     cy.task("getGlobalState").then((state) => {
       globalState = new State(state);
-      console.log("seeding globalState -> " + JSON.stringify(globalState));
     });
   });
 
   after("flush global state", () => {
-    console.log("flushing globalState -> " + JSON.stringify(globalState));
     cy.task("setGlobalState", globalState.data);
   });
 
   it("connector-create-call-test", () => {
-    cy.createPayoutConnectorCallTest(createConnectorBody, globalState);
+    cy.createPayoutConnectorCallTest(fixtures.createConnectorBody, globalState);
   });
 });

@@ -1,6 +1,7 @@
 pub mod admin;
 pub mod api_keys;
 pub mod api_locking;
+pub mod apple_pay_certificates_migration;
 pub mod authentication;
 pub mod blocklist;
 pub mod cache;
@@ -13,6 +14,7 @@ pub mod connector_onboarding;
 pub mod currency;
 pub mod customers;
 pub mod disputes;
+pub mod encryption;
 pub mod errors;
 pub mod files;
 #[cfg(feature = "frm")]
@@ -25,6 +27,8 @@ pub mod metrics;
 pub mod payment_link;
 pub mod payment_methods;
 pub mod payments;
+#[cfg(feature = "payouts")]
+pub mod payout_link;
 #[cfg(feature = "payouts")]
 pub mod payouts;
 pub mod pm_auth;

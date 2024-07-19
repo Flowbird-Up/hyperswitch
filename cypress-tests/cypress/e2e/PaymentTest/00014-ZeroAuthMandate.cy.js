@@ -1,8 +1,6 @@
-import citConfirmBody from "../../fixtures/create-mandate-cit.json";
-import mitConfirmBody from "../../fixtures/create-mandate-mit.json";
+import * as fixtures from "../../fixtures/imports";
 import State from "../../utils/State";
-import getConnectorDetails from "../PaymentUtils/utils";
-import * as utils from "../PaymentUtils/utils";
+import getConnectorDetails, * as utils from "../PaymentUtils/Utils";
 
 let globalState;
 
@@ -35,14 +33,14 @@ describe("Card - SingleUse Mandates flow test", () => {
         let req_data = data["Request"];
         let res_data = data["Response"];
         cy.citForMandatesCallTest(
-          citConfirmBody,
+          fixtures.citConfirmBody,
           req_data,
           res_data,
           0,
           true,
           "automatic",
           "setup_mandate",
-          globalState,
+          globalState
         );
         if (should_continue)
           should_continue = utils.should_continue_further(res_data);
@@ -50,14 +48,14 @@ describe("Card - SingleUse Mandates flow test", () => {
 
       it("Confirm No 3DS MIT", () => {
         cy.mitForMandatesCallTest(
-          mitConfirmBody,
+          fixtures.mitConfirmBody,
           7000,
           true,
           "automatic",
-          globalState,
+          globalState
         );
       });
-    },
+    }
   );
   context(
     "Card - NoThreeDS Create + Confirm Automatic CIT and Multi use MIT payment flow test",
@@ -77,14 +75,14 @@ describe("Card - SingleUse Mandates flow test", () => {
         let req_data = data["Request"];
         let res_data = data["Response"];
         cy.citForMandatesCallTest(
-          citConfirmBody,
+          fixtures.citConfirmBody,
           req_data,
           res_data,
           0,
           true,
           "automatic",
           "setup_mandate",
-          globalState,
+          globalState
         );
         if (should_continue)
           should_continue = utils.should_continue_further(res_data);
@@ -92,22 +90,22 @@ describe("Card - SingleUse Mandates flow test", () => {
 
       it("Confirm No 3DS MIT", () => {
         cy.mitForMandatesCallTest(
-          mitConfirmBody,
+          fixtures.mitConfirmBody,
           7000,
           true,
           "automatic",
-          globalState,
+          globalState
         );
       });
       it("Confirm No 3DS MIT", () => {
         cy.mitForMandatesCallTest(
-          mitConfirmBody,
+          fixtures.mitConfirmBody,
           7000,
           true,
           "automatic",
-          globalState,
+          globalState
         );
       });
-    },
+    }
   );
 });

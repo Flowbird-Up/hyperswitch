@@ -1,14 +1,14 @@
-use std::{
-    collections::HashSet,
-    ops::{self, Not},
-    str::FromStr,
-};
+use std::{collections::HashSet, ops, str::FromStr};
 
 use api_models::{
     admin as admin_api, organization as api_org, user as user_api, user_role as user_role_api,
 };
 use common_enums::TokenPurpose;
-use common_utils::{crypto::Encryptable, errors::CustomResult, pii};
+#[cfg(not(feature = "v2"))]
+use common_utils::id_type;
+#[cfg(feature = "keymanager_create")]
+use common_utils::types::keymanager::{EncryptionCreateRequest, Identifier};
+use common_utils::{crypto::Encryptable, errors::CustomResult, new_type::MerchantName, pii};
 use diesel_models::{
     enums::{TotpStatus, UserStatus},
     organization as diesel_org,
@@ -29,7 +29,7 @@ use crate::{
         admin,
         errors::{self, UserErrors, UserResult},
     },
-    db::StorageInterface,
+    db::GlobalStorageInterface,
     routes::SessionState,
     services::{self, authentication as auth, authentication::UserFromToken, authorization::info},
     types::transformers::ForeignFrom,
@@ -39,6 +39,7 @@ use crate::{
 pub mod dashboard_metadata;
 pub mod decision_manager;
 pub use decision_manager::*;
+pub mod user_authentication_method;
 
 use super::{types as domain_types, UserKeyStore};
 
@@ -284,9 +285,12 @@ impl From<user_api::ConnectAccountRequest> for NewUserOrganization {
     }
 }
 
-impl From<user_api::CreateInternalUserRequest> for NewUserOrganization {
-    fn from(_value: user_api::CreateInternalUserRequest) -> Self {
-        let new_organization = api_org::OrganizationNew::new(None);
+impl From<(user_api::CreateInternalUserRequest, String)> for NewUserOrganization {
+    fn from((_value, org_id): (user_api::CreateInternalUserRequest, String)) -> Self {
+        let new_organization = api_org::OrganizationNew {
+            org_id,
+            org_name: None,
+        };
         let db_organization = ForeignFrom::foreign_from(new_organization);
         Self(db_organization)
     }
@@ -338,6 +342,15 @@ pub struct NewUserMerchant {
     new_organization: NewUserOrganization,
 }
 
+impl TryFrom<UserCompanyName> for MerchantName {
+    // We should ideally not get this error because all the validations are done for company name
+    type Error = error_stack::Report<UserErrors>;
+
+    fn try_from(company_name: UserCompanyName) -> Result<Self, Self::Error> {
+        Self::new(company_name.get_secret()).change_context(UserErrors::CompanyNameParsingError)
+    }
+}
+
 impl NewUserMerchant {
     pub fn get_company_name(&self) -> Option<String> {
         self.company_name.clone().map(UserCompanyName::get_secret)
@@ -370,34 +383,68 @@ impl NewUserMerchant {
         Ok(())
     }
 
+    #[cfg(feature = "v2")]
+    fn create_merchant_account_request(&self) -> UserResult<admin_api::MerchantAccountCreate> {
+        let merchant_name = if let Some(company_name) = self.company_name.clone() {
+            MerchantName::try_from(company_name)
+        } else {
+            MerchantName::new("merchant".to_string())
+                .change_context(UserErrors::InternalServerError)
+                .attach_printable("merchant name validation failed")
+        }
+        .map(Secret::new)?;
+
+        Ok(admin_api::MerchantAccountCreate {
+            merchant_name,
+            organization_id: self.new_organization.get_organization_id(),
+            metadata: None,
+            merchant_details: None,
+        })
+    }
+
+    #[cfg(not(feature = "v2"))]
+    fn create_merchant_account_request(&self) -> UserResult<admin_api::MerchantAccountCreate> {
+        Ok(admin_api::MerchantAccountCreate {
+            merchant_id: id_type::MerchantId::from(self.get_merchant_id().into())
+                .change_context(UserErrors::MerchantIdParsingError)
+                .attach_printable(
+                    "Unable to convert to MerchantId type because of constraint violations",
+                )?,
+            metadata: None,
+            locker_id: None,
+            return_url: None,
+            merchant_name: self.get_company_name().map(Secret::new),
+            webhook_details: None,
+            publishable_key: None,
+            organization_id: Some(self.new_organization.get_organization_id()),
+            merchant_details: None,
+            routing_algorithm: None,
+            parent_merchant_id: None,
+            sub_merchants_enabled: None,
+            frm_routing_algorithm: None,
+            #[cfg(feature = "payouts")]
+            payout_routing_algorithm: None,
+            primary_business_details: None,
+            payment_response_hash_key: None,
+            enable_payment_response_hash: None,
+            redirect_to_merchant_with_http_post: None,
+            pm_collect_link_config: None,
+        })
+    }
+
     pub async fn create_new_merchant_and_insert_in_db(
         &self,
         state: SessionState,
     ) -> UserResult<()> {
         self.check_if_already_exists_in_db(state.clone()).await?;
+
+        let merchant_account_create_request = self
+            .create_merchant_account_request()
+            .attach_printable("unable to construct merchant account create request")?;
+
         Box::pin(admin::create_merchant_account(
             state.clone(),
-            admin_api::MerchantAccountCreate {
-                merchant_id: self.get_merchant_id(),
-                metadata: None,
-                locker_id: None,
-                return_url: None,
-                merchant_name: self.get_company_name().map(Secret::new),
-                webhook_details: None,
-                publishable_key: None,
-                organization_id: Some(self.new_organization.get_organization_id()),
-                merchant_details: None,
-                routing_algorithm: None,
-                parent_merchant_id: None,
-                sub_merchants_enabled: None,
-                frm_routing_algorithm: None,
-                #[cfg(feature = "payouts")]
-                payout_routing_algorithm: None,
-                primary_business_details: None,
-                payment_response_hash_key: None,
-                enable_payment_response_hash: None,
-                redirect_to_merchant_with_http_post: None,
-            },
+            merchant_account_create_request,
         ))
         .await
         .change_context(UserErrors::InternalServerError)
@@ -457,10 +504,10 @@ impl TryFrom<user_api::SignUpWithMerchantIdRequest> for NewUserMerchant {
     }
 }
 
-impl TryFrom<user_api::CreateInternalUserRequest> for NewUserMerchant {
+impl TryFrom<(user_api::CreateInternalUserRequest, String)> for NewUserMerchant {
     type Error = error_stack::Report<UserErrors>;
 
-    fn try_from(value: user_api::CreateInternalUserRequest) -> UserResult<Self> {
+    fn try_from(value: (user_api::CreateInternalUserRequest, String)) -> UserResult<Self> {
         let merchant_id =
             MerchantId::new(consts::user_role::INTERNAL_USER_MERCHANT_ID.to_string())?;
         let new_organization = NewUserOrganization::from(value);
@@ -514,9 +561,8 @@ pub struct NewUser {
     user_id: String,
     name: UserName,
     email: UserEmail,
-    password: UserPassword,
+    password: Option<UserPassword>,
     new_merchant: NewUserMerchant,
-    is_temporary_password: bool,
 }
 
 impl NewUser {
@@ -536,13 +582,13 @@ impl NewUser {
         self.new_merchant.clone()
     }
 
-    pub fn get_password(&self) -> UserPassword {
+    pub fn get_password(&self) -> Option<UserPassword> {
         self.password.clone()
     }
 
     pub async fn insert_user_in_db(
         &self,
-        db: &dyn StorageInterface,
+        db: &dyn GlobalStorageInterface,
     ) -> UserResult<UserFromStorage> {
         match db.insert_user(self.clone().try_into()?).await {
             Ok(user) => Ok(user.into()),
@@ -559,7 +605,7 @@ impl NewUser {
 
     pub async fn check_if_already_exists_in_db(&self, state: SessionState) -> UserResult<()> {
         if state
-            .store
+            .global_store
             .find_user_by_email(&self.get_email().into_inner())
             .await
             .is_ok()
@@ -574,7 +620,7 @@ impl NewUser {
         state: SessionState,
     ) -> UserResult<UserFromStorage> {
         self.check_if_already_exists_in_db(state.clone()).await?;
-        let db = state.store.as_ref();
+        let db = state.global_store.as_ref();
         let merchant_id = self.get_new_merchant().get_merchant_id();
         self.new_merchant
             .create_new_merchant_and_insert_in_db(state.clone())
@@ -620,7 +666,12 @@ impl TryFrom<NewUser> for storage_user::UserNew {
     type Error = error_stack::Report<UserErrors>;
 
     fn try_from(value: NewUser) -> UserResult<Self> {
-        let hashed_password = password::generate_password_hash(value.password.get_secret())?;
+        let hashed_password = value
+            .password
+            .as_ref()
+            .map(|password| password::generate_password_hash(password.get_secret()))
+            .transpose()?;
+
         let now = common_utils::date_time::now();
         Ok(Self {
             user_id: value.get_user_id(),
@@ -634,7 +685,7 @@ impl TryFrom<NewUser> for storage_user::UserNew {
             totp_status: TotpStatus::NotSet,
             totp_secret: None,
             totp_recovery_codes: None,
-            last_password_modified_at: value.is_temporary_password.not().then_some(now),
+            last_password_modified_at: value.password.is_some().then_some(now),
         })
     }
 }
@@ -652,10 +703,9 @@ impl TryFrom<user_api::SignUpWithMerchantIdRequest> for NewUser {
         Ok(Self {
             name,
             email,
-            password,
+            password: Some(password),
             user_id,
             new_merchant,
-            is_temporary_password: false,
         })
     }
 }
@@ -674,9 +724,8 @@ impl TryFrom<user_api::SignUpRequest> for NewUser {
             user_id,
             name,
             email,
-            password,
+            password: Some(password),
             new_merchant,
-            is_temporary_password: false,
         })
     }
 }
@@ -688,37 +737,36 @@ impl TryFrom<user_api::ConnectAccountRequest> for NewUser {
         let user_id = uuid::Uuid::new_v4().to_string();
         let email = value.email.clone().try_into()?;
         let name = UserName::try_from(value.email.clone())?;
-        let password = UserPassword::new(password::get_temp_password())?;
         let new_merchant = NewUserMerchant::try_from(value)?;
 
         Ok(Self {
             user_id,
             name,
             email,
-            password,
+            password: None,
             new_merchant,
-            is_temporary_password: true,
         })
     }
 }
 
-impl TryFrom<user_api::CreateInternalUserRequest> for NewUser {
+impl TryFrom<(user_api::CreateInternalUserRequest, String)> for NewUser {
     type Error = error_stack::Report<UserErrors>;
 
-    fn try_from(value: user_api::CreateInternalUserRequest) -> UserResult<Self> {
+    fn try_from(
+        (value, org_id): (user_api::CreateInternalUserRequest, String),
+    ) -> UserResult<Self> {
         let user_id = uuid::Uuid::new_v4().to_string();
         let email = value.email.clone().try_into()?;
         let name = UserName::new(value.name.clone())?;
         let password = UserPassword::new(value.password.clone())?;
-        let new_merchant = NewUserMerchant::try_from(value)?;
+        let new_merchant = NewUserMerchant::try_from((value, org_id))?;
 
         Ok(Self {
             user_id,
             name,
             email,
-            password,
+            password: Some(password),
             new_merchant,
-            is_temporary_password: false,
         })
     }
 }
@@ -734,11 +782,12 @@ impl TryFrom<UserMerchantCreateRequestWithToken> for NewUser {
             user_id: user.0.user_id,
             name: UserName::new(user.0.name)?,
             email: user.0.email.clone().try_into()?,
-            password: UserPassword::new_password_without_validation(user.0.password)?,
+            password: user
+                .0
+                .password
+                .map(UserPassword::new_password_without_validation)
+                .transpose()?,
             new_merchant,
-            // This is true because we are not creating a user with this request. And if it is set
-            // to false, last_password_modified_at will be overwritten if this user is inserted.
-            is_temporary_password: true,
         })
     }
 }
@@ -749,7 +798,8 @@ impl TryFrom<InviteeUserRequestWithInvitedUserToken> for NewUser {
         let user_id = uuid::Uuid::new_v4().to_string();
         let email = value.0.email.clone().try_into()?;
         let name = UserName::new(value.0.name.clone())?;
-        let password = UserPassword::new(password::get_temp_password())?;
+        let password = cfg!(not(feature = "email"))
+            .then_some(UserPassword::new(password::get_temp_password())?);
         let new_merchant = NewUserMerchant::try_from(value)?;
 
         Ok(Self {
@@ -758,7 +808,6 @@ impl TryFrom<InviteeUserRequestWithInvitedUserToken> for NewUser {
             email,
             password,
             new_merchant,
-            is_temporary_password: true,
         })
     }
 }
@@ -778,10 +827,14 @@ impl UserFromStorage {
     }
 
     pub fn compare_password(&self, candidate: &Secret<String>) -> UserResult<()> {
-        match password::is_correct_password(candidate, &self.0.password) {
-            Ok(true) => Ok(()),
-            Ok(false) => Err(UserErrors::InvalidCredentials.into()),
-            Err(e) => Err(e),
+        if let Some(password) = self.0.password.as_ref() {
+            match password::is_correct_password(candidate, password) {
+                Ok(true) => Ok(()),
+                Ok(false) => Err(UserErrors::InvalidCredentials.into()),
+                Err(e) => Err(e),
+            }
+        } else {
+            Err(UserErrors::InvalidCredentials.into())
         }
     }
 
@@ -830,6 +883,10 @@ impl UserFromStorage {
 
         let days_left_for_verification = last_date_for_verification - today;
         Ok(Some(days_left_for_verification.whole_days()))
+    }
+
+    pub fn is_verified(&self) -> bool {
+        self.0.is_verified
     }
 
     pub fn is_password_rotate_required(&self, state: &SessionState) -> UserResult<bool> {
@@ -893,7 +950,7 @@ impl UserFromStorage {
     pub async fn get_or_create_key_store(&self, state: &SessionState) -> UserResult<UserKeyStore> {
         let master_key = state.store.get_master_key();
         let key_store_result = state
-            .store
+            .global_store
             .get_user_key_store_by_user_id(self.get_user_id(), &master_key.to_vec().into())
             .await;
 
@@ -916,8 +973,21 @@ impl UserFromStorage {
                     .change_context(UserErrors::InternalServerError)?,
                 created_at: common_utils::date_time::now(),
             };
+
+            #[cfg(feature = "keymanager_create")]
+            {
+                common_utils::keymanager::create_key_in_key_manager(
+                    &state.into(),
+                    EncryptionCreateRequest {
+                        identifier: Identifier::User(key_store.user_id.clone()),
+                    },
+                )
+                .await
+                .change_context(UserErrors::InternalServerError)?;
+            }
+
             state
-                .store
+                .global_store
                 .insert_user_key_store(key_store, &master_key.to_vec().into())
                 .await
                 .change_context(UserErrors::InternalServerError)
@@ -946,7 +1016,7 @@ impl UserFromStorage {
         }
 
         let user_key_store = state
-            .store
+            .global_store
             .get_user_key_store_by_user_id(
                 self.get_user_id(),
                 &state.store.get_master_key().to_vec().into(),
@@ -1098,6 +1168,7 @@ impl SignInWithMultipleRolesStrategy {
                     TokenPurpose::AcceptInvite,
                     Origin::SignIn,
                     &state.conf,
+                    vec![],
                 )
                 .await?
                 .into(),

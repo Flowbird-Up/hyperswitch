@@ -8,10 +8,12 @@ use test_utils::connector_auth;
 
 mod aci;
 mod adyen;
+mod adyenplatform;
 mod airwallex;
 mod authorizedotnet;
 mod archipel;
 mod bambora;
+mod bamboraapac;
 #[cfg(feature = "dummy_connector")]
 mod bankofamerica;
 #[cfg(feature = "dummy_connector")]
@@ -24,6 +26,7 @@ mod checkout;
 mod coinbase;
 mod cryptopay;
 mod cybersource;
+mod datatrans;
 mod dlocal;
 #[cfg(feature = "dummy_connector")]
 mod dummyconnector;
@@ -58,6 +61,7 @@ mod powertranz;
 #[cfg(feature = "dummy_connector")]
 mod prophetpay;
 mod rapyd;
+mod razorpay;
 mod shift4;
 mod square;
 mod stax;
