@@ -1718,6 +1718,7 @@ default_imp_for_payouts_recipient_account!(
     connector::Adyen,
     connector::Airwallex,
     connector::Authorizedotnet,
+    connector::Archipel,
     connector::Bambora,
     connector::Bamboraapac,
     connector::Bankofamerica,

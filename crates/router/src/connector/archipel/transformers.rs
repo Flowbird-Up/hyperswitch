@@ -779,3 +779,71 @@ impl TryFrom<types::RefundsResponseRouterData<api::RSync, RefundResponse>> for t
         })
     }
 }
+
+// Setup Mandate FLow
+
+impl TryFrom<&types::SetupMandateRouterData> for ArchipelAuthorizationRequest  {
+    type Error = error_stack::Report<errors::ConnectorError>;
+    fn try_from(_item: &types::SetupMandateRouterData) -> Result<Self,Self::Error> {
+        Ok(Self {
+            order: ArchipelOrderRequest {
+                amount: 0,
+                currency: String::new(),
+                initiator: ArchipelPaymentInitiator::Customer
+            },
+            cardholder: None,
+            card: None,
+            credential_indicator: None,
+            tenant_id: String::new(),
+            stored_on_file: false,
+            three_ds: None,
+            token_id: None,
+            wallet: None
+        })
+    }
+}
+
+impl<F> TryFrom<types::ResponseRouterData<F,
+    ArchipelPaymentsResponse,
+    types::SetupMandateRequestData,
+    types::PaymentsResponseData>> for types::RouterData<F, types::SetupMandateRequestData, types::PaymentsResponseData> {
+    type Error = error_stack::Report<errors::ConnectorError>;
+    fn try_from(item: types::ResponseRouterData<
+        F,
+        ArchipelPaymentsResponse,
+        types::SetupMandateRequestData,
+        types::PaymentsResponseData>) -> Result<Self,Self::Error> {
+
+        let status = enums::AttemptStatus::foreign_from(
+            (item.response.status.clone(), ArchipelPaymentCase::Verify)
+        );
+
+        let metadata: Option<serde_json::Value> = ArchipelTransactionMetadata::from(&item.response)
+            .encode_to_value()
+            .ok();
+
+        let payment_checks: Option<types::ConnectorResponseData> = Some(
+            types::ConnectorResponseData::with_additional_payment_method_data(
+                types::AdditionalPaymentMethodConnectorResponse::from(
+                    &ArchipelTransactionReference::from(&item.response)
+                )
+            )
+        );
+
+        Ok(Self {
+            status,
+            response: Ok(types::PaymentsResponseData::TransactionResponse {
+                resource_id: types::ResponseId::ConnectorTransactionId(item.response.order.id.to_owned()),
+                charge_id: None,
+                redirection_data: None,
+                mandate_reference: None,
+                connector_metadata: metadata,
+                network_txn_id: None,
+                connector_response_reference_id: None,
+                incremental_authorization_allowed: None,
+            }),
+            connector_response: payment_checks,
+            ..item.data
+        })
+    }
+}
