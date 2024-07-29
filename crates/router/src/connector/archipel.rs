@@ -589,7 +589,16 @@ impl ConnectorIntegration<api::SetupMandate,
     fn get_request_body(&self,
                         req: &types::SetupMandateRouterData,
                         _connectors: &settings::Connectors,) -> CustomResult<RequestContent, errors::ConnectorError> {
-        let connector_req = archipel::ArchipelAuthorizationRequest::try_from(req)?;
+        let tenant = get_tenant_id(req.get_connector_meta().unwrap());
+        let connector_router_data =
+            archipel::ArchipelRouterData::try_from((
+                &self.get_currency_unit(),
+                req.request.currency,
+                0,
+                req,
+                tenant
+            ))?;
+        let connector_req = archipel::ArchipelAuthorizationRequest::try_from(&connector_router_data)?;
         Ok(RequestContent::Json(Box::new(connector_req)))
     }
 
@@ -603,9 +612,7 @@ impl ConnectorIntegration<api::SetupMandate,
                 .method(services::Method::Post)
                 .url(&types::SetupMandateType::get_url(self, req, connectors)?)
                 .attach_default_headers()
-                .headers(types::SetupMandateType::get_headers(
-                    self, req, connectors,
-                )?)
+                .headers(types::SetupMandateType::get_headers(self, req, connectors)?)
                 .set_body(types::SetupMandateType::get_request_body(self, req, connectors)?)
                 .build(),
         ))
