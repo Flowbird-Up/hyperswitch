@@ -4,6 +4,7 @@
     "Scenario2-Confirming the payment without PMD",
     "Scenario3-Create payment with Manual capture but wrong pan",
     "Scenario4-Capture greater amount",
-    "Scenario5-Capture the succeeded payment"
+    "Scenario5-Capture the succeeded payment",
+    "Scenario9-Create a recurring payment with greater mandate amount"
   ]
 }
