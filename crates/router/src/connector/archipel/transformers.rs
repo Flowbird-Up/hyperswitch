@@ -853,22 +853,15 @@ impl TryFrom<&ArchipelRouterData<&types::SetupMandateRouterData>> for ArchipelAu
             billing_address: ArchipelBillingAddress::try_from(billing_details).ok()
         });
 
-        // TODO: bind credentialsIndicator
         let credential_indicator = Some(ArchipelCredentialIndicator {
             status: ArchipelCredentialIndicatorStatus::Initial,
             recurring: Some(false),
             transaction_id: None
         });
 
-        // TODO: bind stored_on_file. False by default
-        let stored_on_file = false;
-
         let tenant_id: String = item.tenant_id.clone().ok_or(errors::ConnectorError::InvalidConnectorConfig {
             config: "Missing tenant_id. Please check your merchant connector account metadata."
         })?;
-
-        // TODO: bind tenant_id
-        let token_id: Option<String> = None;
 
         Ok(Self {
             order,
@@ -877,9 +870,9 @@ impl TryFrom<&ArchipelRouterData<&types::SetupMandateRouterData>> for ArchipelAu
             wallet,
             three_ds,
             credential_indicator,
-            stored_on_file,
+            stored_on_file: true,
             tenant_id,
-            token_id,
+            token_id: None,
         })
     }
 }
