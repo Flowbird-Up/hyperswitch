@@ -1,12 +1,11 @@
 use bytes::Bytes;
 use rdkafka::message::ToBytes;
 use serde::{Deserialize, Serialize};
-use api_models::payments::AddressDetails;
 use common_utils::ext_traits::Encode;
 use masking::Secret;
 use crate::{core::errors, types::{self, api, storage::enums, transformers::ForeignFrom, transformers::ForeignTryFrom}};
 use crate::connector::utils;
-use crate::connector::utils::{AddressDetailsData, CardData, RouterData};
+use crate::connector::utils::{AddressData, AddressDetailsData, CardData, CardIssuer, RouterData};
 use crate::types::domain;
 
 //TODO: Fill the struct with respective fields
@@ -102,9 +101,9 @@ pub struct ArchipelCard {
     number: cards::CardNumber,
     expiry: CardExpiryDate,
     security_code: Secret<String>,
-    card_holder_name: Option<Secret<String>>,
+    card_holder_name: Secret<String>,
     application_selection_indicator: ApplicationSelectionIndicator,
-    scheme: Option<String>,
+    scheme: ArchipelCardScheme,
 }
 
 #[derive(Debug, Serialize, Eq, PartialEq)]
@@ -170,17 +169,16 @@ impl TryFrom<Option<ArchipelBillingAddress>> for ArchipelCardHolder {
 #[derive(Debug, Serialize, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ArchipelBillingAddress {
-    address: Option<Secret<String>>,
-    postal_code: Option<Secret<String>>,
+    address: Secret<String>,
+    postal_code: Secret<String>,
 }
 
-impl TryFrom<Option<AddressDetails>> for ArchipelBillingAddress {
-    type Error = ();
-    fn try_from(_address_details: Option<AddressDetails>) -> Result<Self, Self::Error> {
-        let details = _address_details.unwrap();
+impl TryFrom<api_models::payments::AddressDetails> for ArchipelBillingAddress {
+    type Error = error_stack::Report<errors::ConnectorError>;
+    fn try_from(address_details: api_models::payments::AddressDetails) -> Result<Self, Self::Error> {
         Ok(Self {
-            address: details.get_combined_address_line().ok(),
-            postal_code: details.zip,
+            address: address_details.get_combined_address_line()?,
+            postal_code: address_details.get_zip()?.clone(),
         })
     }
 }
@@ -223,33 +221,33 @@ impl TryFrom<&ArchipelRouterData<&types::PaymentsAuthorizeRouterData>> for Archi
             currency: item.router_data.request.currency.to_string(),
             initiator: ArchipelPaymentInitiator::Customer
         };
-        let billing_details = item.router_data.get_billing()?.clone().address.clone().or(None);
-
-        let card_holder_name = billing_details.clone()
-            .ok_or(errors::ConnectorError::MissingRequiredField {field_name: "billing.address"})
-            .unwrap()
-            .get_optional_full_name();
+        let billing_addr = item.router_data.get_billing()?.clone();
+        let card_holder_name = billing_addr
+            .get_optional_full_name()
+            .ok_or(errors::ConnectorError::MissingRequiredField {
+                field_name: "card.card_holder_name"
+            })?;
 
         let payment_information = match item.router_data.request.payment_method_data.clone() {
             domain::PaymentMethodData::Card(ccard) => {
                 ArchipelPaymentInformation::CardPayment (
                     CardPaymentInformation {
-                       card: ArchipelCard {
-                           number: ccard.card_number.clone(),
-                           expiry: CardExpiryDate {
-                               month: ccard.card_exp_month.clone(),
-                               year: ccard.get_card_expiry_year_2_digit().unwrap().clone(),
-                           },
-                           security_code: ccard.card_cvc.clone(),
-                           // TODO: Set with default value. Not yet implemented on HP
-                           application_selection_indicator: ApplicationSelectionIndicator::ByDefault,
-                           card_holder_name,
-                           // TODO: Check mapping scheme card Hs/Archipel
-                           scheme: Some(ccard.card_issuer.or(Some("VISA".to_string())).clone().unwrap().to_uppercase())
-                       },
-                       wallet: None,
-                       three_ds: None,
-                   }
+                        card: ArchipelCard {
+                            number: ccard.card_number.clone(),
+                            expiry: CardExpiryDate {
+                                month: ccard.card_exp_month.clone(),
+                                year: ccard.get_card_expiry_year_2_digit().unwrap().clone(),
+                            },
+                            security_code: ccard.card_cvc.clone(),
+                            // TODO: Set with default value. Not yet implemented on HP
+                            application_selection_indicator: ApplicationSelectionIndicator::ByDefault,
+                            card_holder_name,
+                            scheme: ArchipelCardScheme::foreign_from(ccard.get_card_issuer().ok())
+
+                        },
+                        wallet: None,
+                        three_ds: None,
+                    }
                 )
             }
             // TODO: Implement wallet
@@ -267,9 +265,9 @@ impl TryFrom<&ArchipelRouterData<&types::PaymentsAuthorizeRouterData>> for Archi
             | domain::PaymentMethodData::GiftCard(_)
             | domain::PaymentMethodData::CardToken(_)
             | domain::PaymentMethodData::RealTimePayment(_) => {
-               Err(errors::ConnectorError::NotImplemented(
-                   utils::get_unimplemented_payment_method_error_message("Archipel"),
-               ))?
+                Err(errors::ConnectorError::NotImplemented(
+                    utils::get_unimplemented_payment_method_error_message("Archipel"),
+                ))?
             }
         };
 
@@ -283,7 +281,11 @@ impl TryFrom<&ArchipelRouterData<&types::PaymentsAuthorizeRouterData>> for Archi
         };
 
         let cardholder = Some(ArchipelCardHolder {
-            billing_address: ArchipelBillingAddress::try_from(billing_details).ok()
+            billing_address: ArchipelBillingAddress::try_from(billing_addr.address
+                .ok_or(errors::ConnectorError::MissingRequiredField {
+                    field_name: "billing.address"
+                })?
+            ).ok()
         });
 
         // TODO: bind credentialsIndicator
@@ -296,9 +298,9 @@ impl TryFrom<&ArchipelRouterData<&types::PaymentsAuthorizeRouterData>> for Archi
         // TODO: bind stored_on_file. False by default
         let stored_on_file = false;
 
-        let tenant_id: String = item.tenant_id.clone().ok_or(errors::ConnectorError::InvalidConnectorConfig { 
+        let tenant_id: String = item.tenant_id.clone().ok_or(errors::ConnectorError::InvalidConnectorConfig {
             config: "Missing tenant_id. Please check your merchant connector account metadata."
-         })?;
+        })?;
 
 
         // TODO: bind tenant_id
@@ -319,6 +321,37 @@ impl TryFrom<&ArchipelRouterData<&types::PaymentsAuthorizeRouterData>> for Archi
 }
 
 // PaymentsResponse
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "UPPERCASE")]
+pub enum ArchipelCardScheme {
+    Amex,
+    Mastercard,
+    Visa,
+    Discover,
+    Diners,
+    Unknown,
+}
+
+impl ForeignFrom<Option<CardIssuer>> for ArchipelCardScheme {
+    fn foreign_from(card_issuer: Option<CardIssuer>) -> Self {
+        if !card_issuer.is_none() {
+            match card_issuer.unwrap() {
+                CardIssuer::Visa => ArchipelCardScheme::Visa,
+                CardIssuer::Master |
+                CardIssuer::Maestro => ArchipelCardScheme::Mastercard,
+                CardIssuer::AmericanExpress => ArchipelCardScheme::Amex,
+                CardIssuer::Discover => ArchipelCardScheme::Discover,
+                CardIssuer::DinersClub => ArchipelCardScheme::Diners,
+                _ => ArchipelCardScheme::Unknown,
+            }
+        }
+        else {
+            ArchipelCardScheme::Unknown
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "UPPERCASE")]
 pub enum ArchipelPaymentStatus {
@@ -327,22 +360,11 @@ pub enum ArchipelPaymentStatus {
     Refused,
     Error,
 }
-
-// TODO: Add all possible cases
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub enum ArchipelPaymentCase {
-    Verify,
-    Authorize,
-    Pay,
-    Capture,
-    Cancel,
-}
-
 impl ForeignTryFrom<(enums::AttemptStatus, enums::CaptureMethod)> for ArchipelPaymentCase {
     type Error = errors::ConnectorError;
 
-    fn foreign_try_from((status, capture_method): 
-    (enums::AttemptStatus, enums::CaptureMethod)) -> Result<Self,Self::Error> {
+    fn foreign_try_from((status, capture_method):
+                        (enums::AttemptStatus, enums::CaptureMethod)) -> Result<Self,Self::Error> {
         let is_auto_capture = match capture_method {
             enums::CaptureMethod::Automatic => { true },
             _ => { false }
@@ -357,8 +379,8 @@ impl ForeignTryFrom<(enums::AttemptStatus, enums::CaptureMethod)> for ArchipelPa
             enums::AttemptStatus::AuthorizationFailed => {
                 Ok(ArchipelPaymentCase::Authorize)
             },
-            enums::AttemptStatus::Voided | 
-            enums::AttemptStatus::VoidInitiated | 
+            enums::AttemptStatus::Voided |
+            enums::AttemptStatus::VoidInitiated |
             enums::AttemptStatus::VoidFailed => {
                 Ok(ArchipelPaymentCase::Cancel)
             },
@@ -383,10 +405,19 @@ impl ForeignTryFrom<(enums::AttemptStatus, enums::CaptureMethod)> for ArchipelPa
                     Some(Bytes::from_static("Impossible to determine Archipel flow from AttemptStatus".to_bytes())))
                 )
             }
-        }       
+        }
     }
 }
 
+// TODO: Add all possible cases
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum ArchipelPaymentCase {
+    Verify,
+    Authorize,
+    Pay,
+    Capture,
+    Cancel,
+}
 
 impl ForeignFrom<(ArchipelPaymentStatus, ArchipelPaymentCase)> for enums::AttemptStatus {
     fn foreign_from((status, archipel_flow): (ArchipelPaymentStatus, ArchipelPaymentCase)) -> Self {
@@ -405,7 +436,7 @@ impl ForeignFrom<(ArchipelPaymentStatus, ArchipelPaymentCase)> for enums::Attemp
                         Self::Authorized
                     }
                 }
-            } 
+            }
             ArchipelPaymentStatus::Pending => {
                 match archipel_flow {
                     ArchipelPaymentCase::Capture |
@@ -507,20 +538,20 @@ pub struct ArchipelPaymentsResponse {
 
 impl From<&ArchipelPaymentsResponse> for ArchipelTransactionMetadata {
     fn from(payment_response: &ArchipelPaymentsResponse) -> Self {
-        Self { 
+        Self {
             transaction_id: payment_response.transaction_id.clone(),
-            transaction_date: payment_response.transaction_date.clone()  
+            transaction_date: payment_response.transaction_date.clone()
         }
     }
 }
 
 impl From<&ArchipelPaymentsResponse> for ArchipelTransactionReference {
     fn from(payment_response: &ArchipelPaymentsResponse) -> Self {
-        Self { 
-            financial_network_code: payment_response.financial_network_code.clone(), 
-            issuer_transaction_id: payment_response.issuer_transaction_id.clone(), 
-            response_code: payment_response.response_code.clone(), 
-            authorization_code: payment_response.authorization_code.clone(), 
+        Self {
+            financial_network_code: payment_response.financial_network_code.clone(),
+            issuer_transaction_id: payment_response.issuer_transaction_id.clone(),
+            response_code: payment_response.response_code.clone(),
+            authorization_code: payment_response.authorization_code.clone(),
             payment_account_reference: payment_response.payment_account_reference.clone()
         }
     }
@@ -596,7 +627,7 @@ impl<F> TryFrom<types::ResponseRouterData<F,
 
         let capture_method = item.data.request.capture_method
             .clone()
-            .ok_or(errors::ConnectorError::CaptureMethodNotSupported)?; 
+            .ok_or(errors::ConnectorError::CaptureMethodNotSupported)?;
 
         let archipel_flow = ArchipelPaymentCase::foreign_try_from(
             (item.data.status.clone(), capture_method)
@@ -653,7 +684,7 @@ impl TryFrom<&ArchipelRouterData<&types::PaymentsCaptureRouterData>> for Archipe
     type Error = error_stack::Report<errors::ConnectorError>;
     fn try_from(item: &ArchipelRouterData<&types::PaymentsCaptureRouterData>) -> Result<Self,Self::Error> {
         Ok(Self {
-            order: ArchipelCaptureOrderRequest { 
+            order: ArchipelCaptureOrderRequest {
                 amount: item.amount.to_owned(),
             }
         })
@@ -666,28 +697,28 @@ impl<F> TryFrom<types::ResponseRouterData<F,
     types::PaymentsResponseData>> for types::RouterData<F, types::PaymentsCaptureData, types::PaymentsResponseData> {
     type Error = error_stack::Report<errors::ConnectorError>;
     fn try_from(item: types::ResponseRouterData<
-        F, 
-        ArchipelPaymentsResponse, 
-        types::PaymentsCaptureData, 
+        F,
+        ArchipelPaymentsResponse,
+        types::PaymentsCaptureData,
         types::PaymentsResponseData>) -> Result<Self,Self::Error> {
 
-            let status = enums::AttemptStatus::foreign_from((item.response.status.clone(), ArchipelPaymentCase::Capture));
+        let status = enums::AttemptStatus::foreign_from((item.response.status.clone(), ArchipelPaymentCase::Capture));
 
-            let connector_metadata: Option<serde_json::Value> = ArchipelTransactionMetadata::from(&item.response) 
-                .encode_to_value()
-                .ok();
+        let connector_metadata: Option<serde_json::Value> = ArchipelTransactionMetadata::from(&item.response)
+            .encode_to_value()
+            .ok();
 
-            let payment_checks: Option<types::ConnectorResponseData> = Some(
-                types::ConnectorResponseData::with_additional_payment_method_data(
-                    types::AdditionalPaymentMethodConnectorResponse::from(
-                        &ArchipelTransactionReference::from(&item.response)
-                    )
+        let payment_checks: Option<types::ConnectorResponseData> = Some(
+            types::ConnectorResponseData::with_additional_payment_method_data(
+                types::AdditionalPaymentMethodConnectorResponse::from(
+                    &ArchipelTransactionReference::from(&item.response)
                 )
-            );
+            )
+        );
 
-            Ok(Self {
-                status,
-                response: Ok(types::PaymentsResponseData::TransactionResponse {
+        Ok(Self {
+            status,
+            response: Ok(types::PaymentsResponseData::TransactionResponse {
                 resource_id: types::ResponseId::ConnectorTransactionId(item.response.order.id.to_owned()),
                 charge_id: None,
                 redirection_data: None,
@@ -790,12 +821,12 @@ impl TryFrom<&ArchipelRouterData<&types::SetupMandateRouterData>> for ArchipelAu
             currency: item.router_data.request.currency.to_string(),
             initiator: ArchipelPaymentInitiator::Customer
         };
-        let billing_details = item.router_data.get_billing()?.clone().address.clone().or(None);
-
-        let card_holder_name = billing_details.clone()
-            .ok_or(errors::ConnectorError::MissingRequiredField {field_name: "billing.address"})
-            .unwrap()
-            .get_optional_full_name();
+        let billing_addr = item.router_data.get_billing()?.clone();
+        let card_holder_name = billing_addr
+            .get_optional_full_name()
+            .ok_or(errors::ConnectorError::MissingRequiredField {
+                field_name: "card.card_holder_name"
+            })?;
 
         let payment_information = match item.router_data.request.payment_method_data.clone() {
             domain::PaymentMethodData::Card(ccard) => {
@@ -811,8 +842,7 @@ impl TryFrom<&ArchipelRouterData<&types::SetupMandateRouterData>> for ArchipelAu
                             // TODO: Set with default value. Not yet implemented on HP
                             application_selection_indicator: ApplicationSelectionIndicator::ByDefault,
                             card_holder_name,
-                            // TODO: Check mapping scheme card Hs/Archipel
-                            scheme: Some(ccard.card_issuer.or(Some("VISA".to_string())).clone().unwrap().to_uppercase())
+                            scheme: ArchipelCardScheme::foreign_from(ccard.get_card_issuer().ok())
                         },
                         wallet: None,
                         three_ds: None,
@@ -850,7 +880,11 @@ impl TryFrom<&ArchipelRouterData<&types::SetupMandateRouterData>> for ArchipelAu
         };
 
         let cardholder = Some(ArchipelCardHolder {
-            billing_address: ArchipelBillingAddress::try_from(billing_details).ok()
+            billing_address: ArchipelBillingAddress::try_from(billing_addr.address
+                .ok_or(errors::ConnectorError::MissingRequiredField {
+                    field_name: "billing.address"
+                })?
+            ).ok()
         });
 
         let credential_indicator = Some(ArchipelCredentialIndicator {
