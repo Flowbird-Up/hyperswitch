@@ -3,6 +3,7 @@
     "Payments - Create(Invalid card number)",
     "Payments - Create(Invalid Exp month)",
     "Payments - Create(Invalid Exp Year)",
-    "Payments - Create(invalid CVV)"
+    "Payments - Create(invalid CVV)",
+    "Payments - Create(invalid card_holder_name)"
   ]
 }

@@ -18,17 +18,29 @@
       }
     },
     "raw_json_formatted": {
-      "amount": 9000,
+      "amount": 500,
+      "amount_to_capture": 500,
       "currency": "EUR",
       "confirm": true,
-      "profile_id": "{{profile_id}}",
       "capture_method": "automatic",
-      "capture_on": "{{$isoTimestamp}}",
-      "customer_id": "{{customer_id}}",
-      "description": "[Archipel Connector][Scenario4] - Create recurring payment greather than mandate amount",
       "authentication_type": "no_three_ds",
-      "mandate_id": "{{mandate_id}}",
-      "off_session": true,
+      "payment_method": "card",
+      "payment_method_type": "credit",
+      "payment_method_data": {
+        "card": {
+          "card_cvc": "123",
+          "card_exp_month": "01",
+          "card_exp_year": "50",
+          "card_holder_name": "John Doe",
+          "card_number": "5185570141917102"
+        }
+      },
+      "profile_id": "{{profile_id}}",
+      "email": "john_doe@gmail.com",
+      "name": "John Doe",
+      "phone": "8056594427",
+      "phone_country_code": "+91",
+      "description": "[Archipel Connector][Variation Cases][Scenario7] - Create card payment without passing card scheme",
       "billing": {
         "address": {
           "line1": "2 ter",
@@ -38,27 +50,6 @@
           "state": "France",
           "zip": "92200",
           "country": "FR"
-        },
-        "phone": {
-          "number": "8056594427",
-          "country_code": "+91"
-        }
-      },
-      "shipping": {
-        "address": {
-          "line1": "1467",
-          "line2": "Harrison Street",
-          "line3": "Harrison Street",
-          "city": "San Fransico",
-          "state": "California",
-          "zip": "94122",
-          "country": "US",
-          "first_name": "joseph",
-          "last_name": "Doe"
-        },
-        "phone": {
-          "number": "8056594427",
-          "country_code": "+91"
         }
       }
     }
