@@ -105,15 +105,6 @@
     {
       "key": "profile_id",
       "value": ""
-    },
-    {
-      "key": "connector_transaction_id",
-      "value": "",
-      "type": "string"
-    },
-    {
-      "key": "archipel_transaction_uuid",
-      "value": ""
     }
   ]
 }

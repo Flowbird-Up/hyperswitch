@@ -54,7 +54,7 @@
           "card_exp_year": "50",
           "card_holder_name": "John Doe",
           "card_number": "5185570141917102",
-          "card_network": "Visa"
+          "card_network": "Mastercard"
         }
       },
       "setup_future_usage": "off_session",
