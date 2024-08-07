@@ -2,7 +2,6 @@
   "childrenOrder": [
     "QuickStart",
     "Happy Cases",
-    "Variation Cases",
-    "Test Token wrapper"
+    "Variation Cases"
   ]
 }
