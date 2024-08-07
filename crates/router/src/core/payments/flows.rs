@@ -2563,7 +2563,6 @@ default_imp_for_incremental_authorization!(
     connector::Adyen,
     connector::Airwallex,
     connector::Authorizedotnet,
-    connector::Archipel,
     connector::Bambora,
     connector::Bamboraapac,
     connector::Bankofamerica,
