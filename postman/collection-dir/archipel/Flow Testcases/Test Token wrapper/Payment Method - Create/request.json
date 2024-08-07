@@ -1,0 +1,43 @@
+{
+  "method": "POST",
+  "header": [
+    {
+      "key": "Content-Type",
+      "value": "application/json"
+    },
+    {
+      "key": "Accept",
+      "value": "application/json"
+    }
+  ],
+  "body": {
+    "mode": "raw",
+    "options": {
+      "raw": {
+        "language": "json"
+      }
+    },
+    "raw_json_formatted": {
+      "card": {
+        "card_exp_month": "01",
+        "card_exp_year": "50",
+        "card_holder_name": "John Doe",
+        "card_number": "5185570141917102"
+      },
+      "customer_id": "{{customer_id}}",
+      "payment_method": "card",
+      "payment_method_issuer": "Visa",
+      "payment_method_type": "credit"
+    }
+  },
+  "url": {
+    "raw": "{{baseUrl}}/payment_methods",
+    "host": [
+      "{{baseUrl}}"
+    ],
+    "path": [
+      "payment_methods"
+    ]
+  },
+  "description": "To process a payment you will have to create a payment, attach a payment method and confirm. Depending on the user journey you wish to achieve, you may opt to all the steps in a single request or in a sequence of API request using following APIs: (i) Payments - Update, (ii) Payments - Confirm, and (iii) Payments - Capture"
+}
