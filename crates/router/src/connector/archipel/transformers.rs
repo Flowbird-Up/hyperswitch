@@ -12,13 +12,13 @@ use crate::types::domain;
 pub struct ArchipelRouterData<T> {
     pub amount: i64, // The type of amount that a connector accepts, for example, String, i64, f64, etc.
     pub router_data: T,
-    pub tenant_id: Option<String>,
+    pub tenant_id: String,
 }
 
-impl<T> TryFrom<(&api::CurrencyUnit, enums::Currency, i64, T, Option<String>)> for ArchipelRouterData<T> {
+impl<T> TryFrom<(&api::CurrencyUnit, enums::Currency, i64, T, String)> for ArchipelRouterData<T> {
     type Error = error_stack::Report<errors::ConnectorError>;
     fn try_from((_currency_unit, _currency, amount, item, tenant):
-                (&api::CurrencyUnit, enums::Currency, i64, T, Option<String>), ) -> Result<Self, Self::Error> {
+                (&api::CurrencyUnit, enums::Currency, i64, T, String), ) -> Result<Self, Self::Error> {
         //Todo :  use utils to convert the amount to the type of amount that a connector accepts
         Ok(Self {
             amount,
@@ -72,11 +72,19 @@ pub enum ArchipelPaymentInitiator {
     Merchant,
 }
 
+#[derive(Debug, Default, Serialize, Eq, PartialEq)]
+#[serde(rename_all = "UPPERCASE")]
+pub enum ArchipelPaymentCertainty {
+    #[default]
+    Final,
+    Estimated,
+}
 #[derive(Debug, Serialize, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ArchipelOrderRequest {
     amount: i64,
     currency: String,
+    certainty: ArchipelPaymentCertainty,
     initiator: ArchipelPaymentInitiator,
 }
 
@@ -219,6 +227,7 @@ impl TryFrom<&ArchipelRouterData<&types::PaymentsAuthorizeRouterData>> for Archi
         let order = ArchipelOrderRequest {
             amount: item.amount.to_owned(),
             currency: item.router_data.request.currency.to_string(),
+            certainty: ArchipelPaymentCertainty::Final,
             initiator: ArchipelPaymentInitiator::Customer
         };
         let billing_addr = item.router_data.get_billing()?.clone();
@@ -298,9 +307,7 @@ impl TryFrom<&ArchipelRouterData<&types::PaymentsAuthorizeRouterData>> for Archi
         // TODO: bind stored_on_file. False by default
         let stored_on_file = false;
 
-        let tenant_id: String = item.tenant_id.clone().ok_or(errors::ConnectorError::InvalidConnectorConfig {
-            config: "Missing tenant_id. Please check your merchant connector account metadata."
-        })?;
+        let tenant_id: String = item.tenant_id.clone();
 
 
         // TODO: bind tenant_id
@@ -595,6 +602,13 @@ impl<F> TryFrom<
             )
         );
 
+        let is_incremental_allowed = if capture_method == enums::CaptureMethod::Automatic {
+            false
+        }
+        else {
+            item.data.request.request_incremental_authorization
+        };
+
         Ok(Self {
             status,
             response: Ok(types::PaymentsResponseData::TransactionResponse {
@@ -605,7 +619,7 @@ impl<F> TryFrom<
                 connector_metadata: metadata,
                 network_txn_id: None,
                 connector_response_reference_id: None,
-                incremental_authorization_allowed: None,
+                incremental_authorization_allowed: Some(is_incremental_allowed),
             }),
             connector_response: transaction_reference,
             ..item.data
@@ -819,6 +833,7 @@ impl TryFrom<&ArchipelRouterData<&types::SetupMandateRouterData>> for ArchipelAu
         let order = ArchipelOrderRequest {
             amount: item.amount.to_owned(),
             currency: item.router_data.request.currency.to_string(),
+            certainty: ArchipelPaymentCertainty::Final,
             initiator: ArchipelPaymentInitiator::Customer
         };
         let billing_addr = item.router_data.get_billing()?.clone();
@@ -893,9 +908,7 @@ impl TryFrom<&ArchipelRouterData<&types::SetupMandateRouterData>> for ArchipelAu
             transaction_id: None
         });
 
-        let tenant_id: String = item.tenant_id.clone().ok_or(errors::ConnectorError::InvalidConnectorConfig {
-            config: "Missing tenant_id. Please check your merchant connector account metadata."
-        })?;
+        let tenant_id: String = item.tenant_id.clone();
 
         Ok(Self {
             order,
@@ -951,6 +964,89 @@ impl<F> TryFrom<types::ResponseRouterData<F,
                 incremental_authorization_allowed: None,
             }),
             connector_response: payment_checks,
+            ..item.data
+        })
+    }
+}
+
+
+
+
+
+#[derive(Debug, Serialize, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ArchipelIncrementalAuthorizationRequest {
+    order: ArchipelOrderRequest,
+    tenant_id: String,
+}
+
+// Incremental Authorization status mapping
+impl From<ArchipelPaymentStatus> for enums::AuthorizationStatus {
+    fn from(status: ArchipelPaymentStatus) -> Self {
+        match status {
+            ArchipelPaymentStatus::Accepted => Self::Success,
+            ArchipelPaymentStatus::Pending => Self::Processing,
+            ArchipelPaymentStatus::Error |
+            ArchipelPaymentStatus::Refused => Self::Failure,
+        }
+    }
+}
+
+impl TryFrom<&ArchipelRouterData<
+    &types::PaymentsIncrementalAuthorizationRouterData>
+> for ArchipelIncrementalAuthorizationRequest  {
+    type Error = error_stack::Report<errors::ConnectorError>;
+    fn try_from(item: &ArchipelRouterData<&types::PaymentsIncrementalAuthorizationRouterData>)
+        -> Result<Self,Self::Error> {
+        Ok(Self {
+            order: ArchipelOrderRequest {
+                amount: item.amount.to_owned(),
+                currency: item.router_data.request.currency.to_string(),
+                certainty: ArchipelPaymentCertainty::Estimated,
+                initiator: ArchipelPaymentInitiator::Customer,
+            },
+            tenant_id: item.tenant_id.clone()
+        })
+    }
+}
+
+impl<F> TryFrom<types::ResponseRouterData<F,
+    ArchipelPaymentsResponse,
+    types::PaymentsIncrementalAuthorizationData,
+    types::PaymentsResponseData>> for types::RouterData<F, types::PaymentsIncrementalAuthorizationData, types::PaymentsResponseData> {
+    type Error = error_stack::Report<errors::ConnectorError>;
+    fn try_from(item: types::ResponseRouterData<
+        F,
+        ArchipelPaymentsResponse,
+        types::PaymentsIncrementalAuthorizationData,
+        types::PaymentsResponseData>) -> Result<Self,Self::Error> {
+
+        let status = enums::AuthorizationStatus::from(item.response.status.clone());
+
+        let connector_response: Option<types::ConnectorResponseData> = Some(
+            types::ConnectorResponseData::with_additional_payment_method_data(
+                types::AdditionalPaymentMethodConnectorResponse::from(
+                    &ArchipelTransactionReference::from(&item.response)
+                )
+            )
+        );
+
+        let errors: (Option<String>, Option<String>) =
+            if status.clone() == enums::AuthorizationStatus::Success ||
+                item.response.error.clone().is_none() { (None, None) }
+            else {
+                let archipel_error = item.response.error.clone().unwrap();
+                (Some(archipel_error.code), archipel_error.description)
+            };
+
+        Ok(Self {
+            response: Ok(types::PaymentsResponseData::IncrementalAuthorizationResponse {
+                status,
+                error_code: errors.0,
+                error_message: errors.1,
+                connector_authorization_id: None
+            }),
+            connector_response,
             ..item.data
         })
     }
