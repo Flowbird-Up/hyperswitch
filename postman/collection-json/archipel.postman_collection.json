@@ -7889,7 +7889,7 @@
 							]
 						},
 						{
-							"name": "Scenario8-Void the success_slash_failure payment Copy",
+							"name": "Scenario8-Void the success_slash_failure payment",
 							"item": [
 								{
 									"name": "Payments - Create",
