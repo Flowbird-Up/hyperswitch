@@ -17,10 +17,10 @@ url = "http://localhost:5000"
 
 # TODO: Update database credentials before running application
 [master_database]
-username = "postgres"
-password = "poller"
-host = "0.0.0.0"
-port = 5442
+username = "db_user"
+password = "db_pass"
+host = "localhost"
+port = 5432
 dbname = "hyperswitch_db"
 pool_size = 5
 connection_timeout = 10
@@ -70,9 +70,10 @@ common_merchant_identifier = "COMMON MERCHANT IDENTIFIER"
 applepay_endpoint = "DOMAIN SPECIFIC ENDPOINT"
 
 [locker]
-host = "http://172.16.105.60:5011"
+host = ""
 host_rs = ""
-mock_locker = false
+mock_locker = true
+basilisk_host = ""
 locker_enabled = true
 ttl_for_storage_in_secs = 220752000
 decryption_scheme = "RSA-OAEP-256"
@@ -87,9 +88,9 @@ fallback_api_key = "YOUR API KEY HERE"
 redis_lock_timeout = 26000
 
 [jwekey]
-vault_encryption_key = "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA0Pp7q2PTfi9AIHgYFRsp\n2de52rADN6mcHsb+rLRHCpxAQonHqurk5XU5ajUUWMQjJoH8zLiXGKuCIPrsUxho\nxknsEBQYS5d6hp8Fij/tnzIm2evfoFoemfbyII5Fxm4yDu/Joh58McFJ3LK0wfRG\nffsHDmWXZdpCPz3q1EC/hEw8TwEIlK56d8rnSNdGJBwcNfZGbSY3YnVQMaE7roUR\nUm+f2Cl5xm0Pg+W85Oab0cFT7/Xacpe8XxlnUdlJiLqXGSxR1BAEcb+IAo5DMvIp\nJL5rWeWGR9qvzyftENcaAwz+Ldr5tan+uv3zjtEJpDkXQivZzO7MqBFsUTvO/zUI\nGwIDAQAB\n-----END PUBLIC KEY-----\n"
+vault_encryption_key = ""
 rust_locker_encryption_key = ""
-vault_private_key = "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC6JKdCGp+Ii8Qi\nhJFiR9E7eVw+XBqVvB0GO/DAO/8Ece+taKqUSrHaj22U3ipC5lQkQuXcQXPjjN7h\nzU62YruhmhW+tcjqkcprQKPzWARxDE0AhZIqslXuGun+uz/VMpQvPUd79ZbemYEN\nNxwuFATSW4/Ik0joBDG67NAzJo6mRAuwVBd9PTjb+ZNsjBM0xfPdCd7a2A8EUdFm\ny4pOPliaTOFgeOsvM01UW5a35f5lO/GYhr8/jalpqJBjSMyl/HNCqDi7bJBDeAkt\nCu/+JpORhXVNb3LJBjCGsu52cwn+IhRTLbmBAjhN3eLvI0O8N3jePD6rtIYIoZ5e\nb4ZQKfklAgMBAAECggEAG5YQBZ9tci6IeDceVqrfCsnfDkzXEcbJpGFguhSKJC4A\nf7oJwaVaO1JTQqM0Lyr0YFVbvGsk0h3P8DXdivER7o6n11YYew71KTTwt0Edk2Vn\nygKBmXtJedqaQAqfGKkAxgl2XRwV6lJkikFXF0sXNdek9OxC+0OX3SR4bIQz0tb0\ngw08L8Dts1EDXaiEOa6e2PFDAKBZ8Lj1KUenj2t6SEH98yUe0H8v+DimEj152xKU\nhYdHJL7WGJ0otvNdSKCn1AgwRcQxzUMkMVUut17Ryw/ItuGxXplYL2wYZVurjDUE\nkCLnN0Frmf1ZOaP2aHOqTz46Tv5dFFJ7DEPcicgnhwKBgQD4+wvAToi/IRaUbbGX\ne/nh5Y/V8NOarh2yQ5QhjyZ27Vcnfpqtmwy922BmOefogpbIAPgVNTHL2mcr40NW\nQj1pm+/fp+dIWGuGopXDwHe4q9z7w2I/ucF3uCH9bfpwuNSnuG3c0ilEvETcZoLH\nnvOup5Uh350v4AxXzc09SuPaywKBgQC/ZBgWGvkgJYmw61NPeZ8hHusSVwl8rVGb\nGuspCaiRObdlzB8AsGtXizRaDFLFQW3wv6O7lLl+FG9CeCNmEwpRE26u3z2m34uR\nnkF1Icuo6aY2wef5w2e0Uazzk+2rV5svjkh6dN6zgi4FOrH1cQPF62nbCrnUlCks\nMAI4NrdNzwKBgQDmkAv8xH0LiUeQodgQMMVg9CVzd7VsiwqC9uOpBBgZj4Xi0/HH\nDEsLUah+YecowC2C/qq9cOoxHYnm8Wh865BVSQsj8SdTLlY8cjj/8i6ru7NDDVbh\nLlJDXCdVuU9urSp4Omi6UX/X4ARgmSlIVCDSvutyV9IG8JJdiP4jYUOJawKBgA6D\nnrf+b6oabqi2D+lVBdZTK+yGITgNRMUIc5D3JItu3xOfOTKqLlnDOsMhcB15asb5\nIYeWLcL79bwKtFSHWR7w5FHqqBhBl6oBYGFroLA8l9hLODZetTydfQozy7BUwnYG\nykRPHJxsYOUQoHJGkcyun6Z218ThP4YUVfbBX4FNAoGBANyjop6wW0T4mD3HV0xU\nzIgLrK87TcowNhoGmmcqmUywDqTbpHGtujAo7uEQpNDGvG3hjbqwhKaNi+XUQs7k\nEOXF94VNw10GuE3lMtWvdqvqTpDRQMjmHXpHKz7KU9dNbB6ZmG4NvmgOAbzBuJr1\nLj8aM4oyCe6w1kiXtMiW+LGs\n-----END PRIVATE KEY-----\n"
+vault_private_key = ""
 tunnel_private_key = ""
 
 [connectors.supported]
@@ -177,7 +178,7 @@ adyenplatform.base_url = "https://balanceplatform-api-test.adyen.com/"
 adyen.secondary_base_url = "https://pal-test.adyen.com/"
 airwallex.base_url = "https://api-demo.airwallex.com/"
 applepay.base_url = "https://apple-pay-gateway.apple.com/"
-archipel.base_url = "http://127.0.0.1:8055/ArchiPEL/"#"http://172.16.105.60:4006/ArchiPEL/"
+archipel.base_url = "https://api.archipel.com/"
 authorizedotnet.base_url = "https://apitest.authorize.net/xml/v1/request.api"
 bambora.base_url = "https://api.na.bambora.com"
 bamboraapac.base_url = "https://demo.ippayments.com.au/interface/api/dts.asmx"
