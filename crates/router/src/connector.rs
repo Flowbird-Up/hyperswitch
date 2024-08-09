@@ -2,6 +2,7 @@ pub mod aci;
 pub mod adyen;
 pub mod adyenplatform;
 pub mod airwallex;
+pub mod archipel;
 pub mod authorizedotnet;
 pub mod bambora;
 pub mod bamboraapac;
@@ -75,7 +76,7 @@ pub use hyperswitch_connectors::connectors::{helcim, helcim::Helcim};
 pub use self::dummyconnector::DummyConnector;
 pub use self::{
     aci::Aci, adyen::Adyen, adyenplatform::Adyenplatform, airwallex::Airwallex,
-    authorizedotnet::Authorizedotnet, bambora::Bambora, bamboraapac::Bamboraapac,
+    authorizedotnet::Authorizedotnet, archipel::Archipel, bambora::Bambora, bamboraapac::Bamboraapac,
     bankofamerica::Bankofamerica, billwerk::Billwerk, bitpay::Bitpay, bluesnap::Bluesnap,
     boku::Boku, braintree::Braintree, cashtocode::Cashtocode, checkout::Checkout,
     coinbase::Coinbase, cryptopay::Cryptopay, cybersource::Cybersource, datatrans::Datatrans,

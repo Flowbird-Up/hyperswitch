@@ -192,6 +192,7 @@ pub enum RoutableConnectors {
     Aci,
     Adyen,
     Airwallex,
+    Archipel,
     Authorizedotnet,
     Bankofamerica,
     Billwerk,
