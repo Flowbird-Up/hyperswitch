@@ -6,6 +6,9 @@
     "Scenario3b-Create payment with partial capture",
     "Scenario4-Zero auth mandates",
     "Scenario5-Create a mandate and recurring payment",
-    "Scenario6-Add card flow"
+    "Scenario6-Add card flow",
+    "Scenario7-Void the payment",
+    "Scenario8a-Incremental authorization",
+    "Scenario8b-Incremental authorization with partial capture"
   ]
 }

@@ -105,6 +105,10 @@
     {
       "key": "profile_id",
       "value": ""
+    },
+    {
+      "key": "connector_transaction_id",
+      "value": ""
     }
   ]
 }

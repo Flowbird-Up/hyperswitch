@@ -305,10 +305,10 @@ impl ConnectorIntegration<api::IncrementalAuthorization,
         connectors: &settings::Connectors,
     ) -> CustomResult<String, errors::ConnectorError> {
         let connector_payment_id = req.request.connector_transaction_id.clone();
-        Ok(format!(
-            "{}/Transaction/v1/incrementAuthorization/{}",
-            self.base_url(connectors),
-            connector_payment_id
+        Ok(format!("{}{}{}",
+                   self.base_url(connectors),
+                   "Transaction/v1/incrementAuthorization/",
+                   connector_payment_id
         ))
     }
 
