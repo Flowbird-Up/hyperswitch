@@ -748,12 +748,98 @@ impl ConnectorIntegration<api::AccessTokenAuth,
     // Not Implemented (R)
 }
 
-
 impl ConnectorIntegration<api::Void,
     types::PaymentsCancelData,
     types::PaymentsResponseData, > for Archipel {
-
+    fn get_headers(&self,
+                   req: &types::PaymentsCancelRouterData,
+                   connectors: &settings::Connectors
+    ) -> CustomResult<Vec<(String, request::Maskable<String>)>,errors::ConnectorError> {
+        self.build_headers(req, connectors)
     }
+
+    fn get_content_type(&self) -> &'static str {
+            self.common_get_content_type()
+        }
+
+        fn get_url(&self,
+                   req: &types::PaymentsCancelRouterData,
+                   connectors: &settings::Connectors) -> CustomResult<String, errors::ConnectorError> {
+            Ok(format!(
+                "{}{}{}",
+                self.base_url(connectors),
+                "Transaction/v1/cancel/",
+                req.request.connector_transaction_id)
+            )
+        }
+
+        fn get_request_body(&self,
+                            req: &types::PaymentsCancelRouterData,
+                            _connectors: &settings::Connectors,) -> CustomResult<RequestContent, errors::ConnectorError> {
+            let tenant = get_tenant_id(req.get_connector_meta()?)?;
+            let connector_router_data =
+                archipel::ArchipelRouterData::try_from((
+                    &self.get_currency_unit(),
+                    req.request
+                        .currency
+                        .ok_or(errors::ConnectorError::MissingRequiredField {
+                            field_name: "Currency",
+                        })?,
+                    req.request
+                        .amount
+                        .ok_or(errors::ConnectorError::MissingRequiredField {
+                            field_name: "Amount",
+                        })?,
+                    req,
+                    tenant
+                ));
+            let connector_req = archipel::ArchipelPaymentsCancelRequest::try_from(&connector_router_data?)?;
+            Ok(RequestContent::Json(Box::new(connector_req)))
+        }
+
+        fn build_request(
+            &self,
+            req: &types::PaymentsCancelRouterData,
+            connectors: &settings::Connectors,
+        ) -> CustomResult<Option<services::Request>, errors::ConnectorError> {
+            Ok(Some(
+                services::RequestBuilder::new()
+                    .method(services::Method::Post)
+                    .url(&types::PaymentsVoidType::get_url(self, req, connectors)?)
+                    .attach_default_headers()
+                    .headers(types::PaymentsVoidType::get_headers(self, req, connectors)?)
+                    .set_body(types::PaymentsVoidType::get_request_body(self, req, connectors)?)
+                    .build(),
+            ))
+        }
+
+        fn handle_response(
+            &self,
+            data: &types::PaymentsCancelRouterData,
+            event_builder: Option<&mut ConnectorEvent>,
+            res: Response,
+        ) -> CustomResult<types::PaymentsCancelRouterData, errors::ConnectorError> {
+            let response: archipel::ArchipelPaymentsResponse = res
+                .response
+                .parse_struct("ArchipelPaymentsResponse")
+                .change_context(errors::ConnectorError::ResponseDeserializationFailed)?;
+            event_builder.map(|i| i.set_response_body(&response));
+            router_env::logger::info!(connector_response=?response);
+            types::RouterData::try_from(types::ResponseRouterData {
+                response,
+                data: data.clone(),
+                http_code: res.status_code,
+            })
+        }
+
+        fn get_error_response(&self,
+                              res: Response,
+                              event_builder: Option<&mut ConnectorEvent>
+        ) -> CustomResult<ErrorResponse, errors::ConnectorError> {
+            self.build_error_response(res, event_builder)
+        }
+    }
+
 #[async_trait::async_trait]
 impl api::IncomingWebhook for Archipel {
     fn get_webhook_object_reference_id(

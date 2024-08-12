@@ -7,6 +7,6 @@
     "Scenario5-Capture the succeeded payment",
     "Scenario6-Create a recurring payment with greater mandate amount",
     "Scenario7-Create a card payment without card scheme",
-    "Scenario8-Void the success_slash_failure payment Copy"
+    "Scenario8-Void the success_slash_failure payment"
   ]
 }
