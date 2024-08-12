@@ -260,20 +260,21 @@ impl TryFrom<&ArchipelRouterData<&types::PaymentsAuthorizeRouterData>> for Archi
                 )
             }
             // TODO: Implement wallet
-            | domain::PaymentMethodData::Wallet(_)
-            | domain::PaymentMethodData::CardRedirect(_)
-            | domain::PaymentMethodData::PayLater(_)
-            | domain::PaymentMethodData::BankRedirect(_)
-            | domain::PaymentMethodData::BankDebit(_)
-            | domain::PaymentMethodData::BankTransfer(_)
-            | domain::PaymentMethodData::Crypto(_)
-            | domain::PaymentMethodData::MandatePayment
-            | domain::PaymentMethodData::Reward
-            | domain::PaymentMethodData::Upi(_)
-            | domain::PaymentMethodData::Voucher(_)
-            | domain::PaymentMethodData::GiftCard(_)
-            | domain::PaymentMethodData::CardToken(_)
-            | domain::PaymentMethodData::RealTimePayment(_) => {
+            domain::PaymentMethodData::Wallet(_) |
+            domain::PaymentMethodData::CardRedirect(_) |
+            domain::PaymentMethodData::PayLater(_) |
+            domain::PaymentMethodData::BankRedirect(_) |
+            domain::PaymentMethodData::BankDebit(_) |
+            domain::PaymentMethodData::BankTransfer(_) |
+            domain::PaymentMethodData::Crypto(_) |
+            domain::PaymentMethodData::MandatePayment |
+            domain::PaymentMethodData::Reward |
+            domain::PaymentMethodData::Upi(_) |
+            domain::PaymentMethodData::Voucher(_) |
+            domain::PaymentMethodData::GiftCard(_) |
+            domain::PaymentMethodData::CardToken(_) |
+            domain::PaymentMethodData::RealTimePayment(_) |
+            domain::PaymentMethodData::OpenBanking(_) => {
                 Err(errors::ConnectorError::NotImplemented(
                     utils::get_unimplemented_payment_method_error_message("Archipel"),
                 ))?
@@ -871,20 +872,21 @@ impl TryFrom<&ArchipelRouterData<&types::SetupMandateRouterData>> for ArchipelAu
                 )
             }
             // TODO: Implement wallet
-            | domain::PaymentMethodData::Wallet(_)
-            | domain::PaymentMethodData::CardRedirect(_)
-            | domain::PaymentMethodData::PayLater(_)
-            | domain::PaymentMethodData::BankRedirect(_)
-            | domain::PaymentMethodData::BankDebit(_)
-            | domain::PaymentMethodData::BankTransfer(_)
-            | domain::PaymentMethodData::Crypto(_)
-            | domain::PaymentMethodData::MandatePayment
-            | domain::PaymentMethodData::Reward
-            | domain::PaymentMethodData::Upi(_)
-            | domain::PaymentMethodData::Voucher(_)
-            | domain::PaymentMethodData::GiftCard(_)
-            | domain::PaymentMethodData::CardToken(_)
-            | domain::PaymentMethodData::RealTimePayment(_) => {
+            domain::PaymentMethodData::Wallet(_) |
+            domain::PaymentMethodData::CardRedirect(_) |
+            domain::PaymentMethodData::PayLater(_) |
+            domain::PaymentMethodData::BankRedirect(_) |
+            domain::PaymentMethodData::BankDebit(_) |
+            domain::PaymentMethodData::BankTransfer(_) |
+            domain::PaymentMethodData::Crypto(_) |
+            domain::PaymentMethodData::MandatePayment |
+            domain::PaymentMethodData::Reward |
+            domain::PaymentMethodData::Upi(_) |
+            domain::PaymentMethodData::Voucher(_) |
+            domain::PaymentMethodData::GiftCard(_) |
+            domain::PaymentMethodData::CardToken(_) |
+            domain::PaymentMethodData::RealTimePayment(_) |
+            domain::PaymentMethodData::OpenBanking(_) => {
                 Err(errors::ConnectorError::NotImplemented(
                     utils::get_unimplemented_payment_method_error_message("Archipel"),
                 ))?
