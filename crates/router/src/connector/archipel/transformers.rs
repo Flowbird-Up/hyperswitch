@@ -217,7 +217,6 @@ pub struct ArchipelAuthorizationRequest {
     credential_indicator: Option<ArchipelCredentialIndicator>,
     stored_on_file: bool,
     tenant_id: String,
-    token_id: Option<String>,
 }
 // PaymentsResponse
 
@@ -589,9 +588,6 @@ impl TryFrom<&ArchipelRouterData<&types::PaymentsAuthorizeRouterData>> for Archi
 
         let tenant_id: String = item.tenant_id.clone();
 
-        // TODO: Be removed
-        let token_id: Option<String> = None;
-
         Ok(Self {
             order,
             cardholder,
@@ -600,8 +596,7 @@ impl TryFrom<&ArchipelRouterData<&types::PaymentsAuthorizeRouterData>> for Archi
             three_ds,
             credential_indicator,
             stored_on_file,
-            tenant_id,
-            token_id,
+            tenant_id
         })
     }
 }
@@ -966,8 +961,7 @@ impl TryFrom<&ArchipelRouterData<&types::SetupMandateRouterData>> for ArchipelAu
             three_ds,
             credential_indicator,
             stored_on_file: true,
-            tenant_id,
-            token_id: None,
+            tenant_id
         })
     }
 }
