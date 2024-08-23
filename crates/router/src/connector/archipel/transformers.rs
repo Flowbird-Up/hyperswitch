@@ -1,11 +1,13 @@
 use bytes::Bytes;
 use rdkafka::message::ToBytes;
 use serde::{Deserialize, Serialize};
+use api_models::payments::MandateReferenceId;
+use crate::core::mandate::MandateBehaviour;
 use common_utils::ext_traits::Encode;
 use masking::Secret;
 use crate::{core::errors, types::{self, api, storage::enums, transformers::ForeignFrom, transformers::ForeignTryFrom}};
 use crate::connector::utils;
-use crate::connector::utils::{AddressData, AddressDetailsData, CardData, CardIssuer, RouterData};
+use crate::connector::utils::{AddressData, AddressDetailsData, CardData, CardIssuer, PaymentsAuthorizeRequestData, RouterData};
 use crate::types::domain;
 
 //TODO: Fill the struct with respective fields
@@ -28,8 +30,6 @@ impl<T> TryFrom<(&api::CurrencyUnit, enums::Currency, i64, T, String)> for Archi
     }
 }
 
-//TODO: Fill the struct with respective fields
-// Auth Struct
 pub struct ArchipelAuthType {}
 
 impl TryFrom<&types::ConnectorAuthType> for ArchipelAuthType  {
@@ -41,7 +41,6 @@ impl TryFrom<&types::ConnectorAuthType> for ArchipelAuthType  {
         }
     }
 }
-
 
 #[derive(Debug, Serialize, Eq, PartialEq)]
 #[serde(untagged)]
@@ -64,7 +63,7 @@ pub struct WalletPaymentInformation {
     three_ds: Archipel3DS
 }
 
-#[derive(Debug, Default, Serialize, Eq, PartialEq)]
+#[derive(Debug, Default, Serialize, Eq, PartialEq, Clone)]
 #[serde(rename_all = "UPPERCASE")]
 pub enum ArchipelPaymentInitiator {
     #[default]
@@ -191,7 +190,7 @@ impl TryFrom<api_models::payments::AddressDetails> for ArchipelBillingAddress {
     }
 }
 
-#[derive(Debug, Serialize, Eq, PartialEq)]
+#[derive(Debug, Serialize, Eq, PartialEq, Clone)]
 #[serde(rename_all = "UPPERCASE")]
 pub enum ArchipelCredentialIndicatorStatus {
     Initial,
@@ -218,116 +217,7 @@ pub struct ArchipelAuthorizationRequest {
     credential_indicator: Option<ArchipelCredentialIndicator>,
     stored_on_file: bool,
     tenant_id: String,
-    token_id: Option<String>,
 }
-
-impl TryFrom<&ArchipelRouterData<&types::PaymentsAuthorizeRouterData>> for ArchipelAuthorizationRequest  {
-    type Error = error_stack::Report<errors::ConnectorError>;
-    fn try_from(item: &ArchipelRouterData<&types::PaymentsAuthorizeRouterData>) -> Result<Self,Self::Error> {
-        let order = ArchipelOrderRequest {
-            amount: item.amount.to_owned(),
-            currency: item.router_data.request.currency.to_string(),
-            certainty: ArchipelPaymentCertainty::Final,
-            initiator: ArchipelPaymentInitiator::Customer
-        };
-        let billing_addr = item.router_data.get_billing()?.clone();
-        let card_holder_name = billing_addr
-            .get_optional_full_name()
-            .ok_or(errors::ConnectorError::MissingRequiredField {
-                field_name: "card.card_holder_name"
-            })?;
-
-        let payment_information = match item.router_data.request.payment_method_data.clone() {
-            domain::PaymentMethodData::Card(ccard) => {
-                ArchipelPaymentInformation::CardPayment (
-                    CardPaymentInformation {
-                        card: ArchipelCard {
-                            number: ccard.card_number.clone(),
-                            expiry: CardExpiryDate {
-                                month: ccard.card_exp_month.clone(),
-                                year: ccard.get_card_expiry_year_2_digit().unwrap().clone(),
-                            },
-                            security_code: ccard.card_cvc.clone(),
-                            // TODO: Set with default value. Not yet implemented on HP
-                            application_selection_indicator: ApplicationSelectionIndicator::ByDefault,
-                            card_holder_name,
-                            scheme: ArchipelCardScheme::foreign_from(ccard.get_card_issuer().ok())
-
-                        },
-                        wallet: None,
-                        three_ds: None,
-                    }
-                )
-            }
-            // TODO: Implement wallet
-            domain::PaymentMethodData::Wallet(_) |
-            domain::PaymentMethodData::CardRedirect(_) |
-            domain::PaymentMethodData::PayLater(_) |
-            domain::PaymentMethodData::BankRedirect(_) |
-            domain::PaymentMethodData::BankDebit(_) |
-            domain::PaymentMethodData::BankTransfer(_) |
-            domain::PaymentMethodData::Crypto(_) |
-            domain::PaymentMethodData::MandatePayment |
-            domain::PaymentMethodData::Reward |
-            domain::PaymentMethodData::Upi(_) |
-            domain::PaymentMethodData::Voucher(_) |
-            domain::PaymentMethodData::GiftCard(_) |
-            domain::PaymentMethodData::CardToken(_) |
-            domain::PaymentMethodData::RealTimePayment(_) |
-            domain::PaymentMethodData::OpenBanking(_) => {
-                Err(errors::ConnectorError::NotImplemented(
-                    utils::get_unimplemented_payment_method_error_message("Archipel"),
-                ))?
-            }
-        };
-
-        let (card, wallet, three_ds): (Option<ArchipelCard>, Option<ArchipelWallet>, Option<Archipel3DS>) = match payment_information {
-            ArchipelPaymentInformation::CardPayment(cpay) => {
-                (Some(cpay.card), cpay.wallet, cpay.three_ds)
-            }
-            ArchipelPaymentInformation::WalletPayment(wpay) => {
-                (wpay.card, Some(wpay.wallet), Some(wpay.three_ds))
-            }
-        };
-
-        let cardholder = Some(ArchipelCardHolder {
-            billing_address: ArchipelBillingAddress::try_from(billing_addr.address
-                .ok_or(errors::ConnectorError::MissingRequiredField {
-                    field_name: "billing.address"
-                })?
-            ).ok()
-        });
-
-        // TODO: bind credentialsIndicator
-        let credential_indicator = Some(ArchipelCredentialIndicator {
-            status: ArchipelCredentialIndicatorStatus::Initial,
-            recurring: Some(false),
-            transaction_id: None
-        });
-
-        // TODO: bind stored_on_file. False by default
-        let stored_on_file = false;
-
-        let tenant_id: String = item.tenant_id.clone();
-
-
-        // TODO: bind tenant_id
-        let token_id: Option<String> = None;
-
-        Ok(Self {
-            order,
-            cardholder,
-            card,
-            wallet,
-            three_ds,
-            credential_indicator,
-            stored_on_file,
-            tenant_id,
-            token_id,
-        })
-    }
-}
-
 // PaymentsResponse
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -571,12 +461,153 @@ impl From<&ArchipelPaymentsResponse> for ArchipelTransactionReference {
     }
 }
 
-// Handle responses for Payments Authorization Flow
+// AUTHORIZATION FLOW
+impl TryFrom<&ArchipelRouterData<&types::PaymentsAuthorizeRouterData>> for ArchipelAuthorizationRequest  {
+    type Error = error_stack::Report<errors::ConnectorError>;
+    fn try_from(item: &ArchipelRouterData<&types::PaymentsAuthorizeRouterData>) -> Result<Self,Self::Error> {
+
+        let is_recurring_payment = item.router_data.request.get_mandate_id().is_some();
+
+        let is_saved_card_payment = (is_recurring_payment) |
+            (item.router_data.request.get_setup_future_usage() == Some(enums::FutureUsage::OnSession)) |
+            (item.router_data.payment_method_status == Some(enums::PaymentMethodStatus::Active));
+
+        let certainty = match item.router_data.request.request_incremental_authorization {
+            true => {
+                if is_recurring_payment { ArchipelPaymentCertainty::Final }
+                else { ArchipelPaymentCertainty::Estimated }
+            },
+            false => ArchipelPaymentCertainty::Final
+        };
+
+        let transaction_initiator = match item.router_data.request.off_session {
+            Some(true) => ArchipelPaymentInitiator::Merchant,
+            _ => ArchipelPaymentInitiator::Customer,
+        };
+
+        let order = ArchipelOrderRequest {
+            amount: item.amount.to_owned(),
+            currency: item.router_data.request.currency.to_string(),
+            certainty,
+            initiator: transaction_initiator.clone()
+        };
+
+        let billing_addr = item.router_data.get_billing()?.clone();
+        let card_holder_name = billing_addr
+            .get_optional_full_name().unwrap_or(Secret::new(String::new()));
+
+        let payment_information = match item.router_data.request.payment_method_data.clone() {
+            domain::PaymentMethodData::Card(ccard) => {
+                ArchipelPaymentInformation::CardPayment (
+                    CardPaymentInformation {
+                        card: ArchipelCard {
+                            number: ccard.card_number.clone(),
+                            expiry: CardExpiryDate {
+                                month: ccard.card_exp_month.clone(),
+                                year: ccard.get_card_expiry_year_2_digit()?,
+                            },
+                            security_code: ccard.card_cvc.clone(),
+                            application_selection_indicator: ApplicationSelectionIndicator::ByDefault,
+                            card_holder_name,
+                            scheme: ArchipelCardScheme::foreign_from(ccard.get_card_issuer().ok())
+                        },
+                        wallet: None,
+                        three_ds: None,
+                    }
+                )
+            }
+            // TODO: Implement wallet
+            domain::PaymentMethodData::Wallet(_) |
+            domain::PaymentMethodData::CardRedirect(_) |
+            domain::PaymentMethodData::PayLater(_) |
+            domain::PaymentMethodData::BankRedirect(_) |
+            domain::PaymentMethodData::BankDebit(_) |
+            domain::PaymentMethodData::BankTransfer(_) |
+            domain::PaymentMethodData::Crypto(_) |
+            domain::PaymentMethodData::MandatePayment |
+            domain::PaymentMethodData::Reward |
+            domain::PaymentMethodData::Upi(_) |
+            domain::PaymentMethodData::Voucher(_) |
+            domain::PaymentMethodData::GiftCard(_) |
+            domain::PaymentMethodData::CardToken(_) |
+            domain::PaymentMethodData::RealTimePayment(_) |
+            domain::PaymentMethodData::OpenBanking(_) => {
+                Err(errors::ConnectorError::NotImplemented(
+                    utils::get_unimplemented_payment_method_error_message("Archipel"),
+                ))?
+            }
+        };
+
+        let (card, wallet, three_ds): (Option<ArchipelCard>, Option<ArchipelWallet>, Option<Archipel3DS>) = match payment_information {
+            ArchipelPaymentInformation::CardPayment(cpay) => {
+                (Some(cpay.card), cpay.wallet, cpay.three_ds)
+            }
+            ArchipelPaymentInformation::WalletPayment(wpay) => {
+                (wpay.card, Some(wpay.wallet), Some(wpay.three_ds))
+            }
+        };
+
+        let cardholder = Some(ArchipelCardHolder {
+            billing_address: ArchipelBillingAddress::try_from(billing_addr.address
+                .ok_or(errors::ConnectorError::MissingRequiredField {
+                    field_name: "billing.address"
+                })?
+            ).ok()
+        });
+        // TODO: Determine if we are on saved card payment for CIT too
+        let stored_on_file = is_saved_card_payment;
+
+        let mut credential_indicator = None;
+
+        if stored_on_file {
+            let indicator_status = match is_recurring_payment {
+                true => ArchipelCredentialIndicatorStatus::Subsequent,
+                false => ArchipelCredentialIndicatorStatus::Initial
+            };
+
+            let transaction_id = item.router_data.request.mandate_id
+                .as_ref()
+                .and_then(|mandate_ids|
+                    match &mandate_ids.mandate_reference_id {
+                        Some(MandateReferenceId::NetworkMandateId(network_trx_id)) => {
+                            Some(network_trx_id.to_string())
+                        }
+                        _ => { None }
+                    }
+                );
+
+            credential_indicator = Some(ArchipelCredentialIndicator {
+                status: indicator_status.clone(),
+                recurring: Some(is_recurring_payment),
+                transaction_id: match indicator_status {
+                    ArchipelCredentialIndicatorStatus::Initial => None,
+                    ArchipelCredentialIndicatorStatus::Subsequent => transaction_id,
+                },
+            })
+        };
+
+        let tenant_id: String = item.tenant_id.clone();
+
+        Ok(Self {
+            order,
+            cardholder,
+            card,
+            wallet,
+            three_ds,
+            credential_indicator,
+            stored_on_file,
+            tenant_id
+        })
+    }
+}
+
+// Responses for AUTHORIZATION FLOW
 impl<F> TryFrom<
     types::ResponseRouterData<F,
         ArchipelPaymentsResponse,
         types::PaymentsAuthorizeData,
-        types::PaymentsResponseData>> for types::RouterData<F, types::PaymentsAuthorizeData, types::PaymentsResponseData> {
+        types::PaymentsResponseData>>
+for types::RouterData<F, types::PaymentsAuthorizeData, types::PaymentsResponseData> {
     type Error = error_stack::Report<errors::ConnectorError>;
     fn try_from(item: types::ResponseRouterData<F,
         ArchipelPaymentsResponse,
@@ -624,7 +655,11 @@ impl<F> TryFrom<
                 redirection_data: None,
                 mandate_reference: None,
                 connector_metadata: metadata,
-                network_txn_id: None,
+                // Save archipel  initial transaction uuid for recurring mandate payment
+                network_txn_id:  match item.data.request.is_customer_initiated_mandate_payment() {
+                    true => Some(item.response.transaction_id),
+                    false => None
+                },
                 connector_response_reference_id: None,
                 incremental_authorization_allowed: Some(is_incremental_allowed),
             }),
@@ -634,7 +669,7 @@ impl<F> TryFrom<
     }
 }
 
-/* PSync Flow */
+// PSYNC FLOW
 impl<F> TryFrom<types::ResponseRouterData<F,
     ArchipelPaymentsResponse,
     types::PaymentsSyncData,
@@ -870,8 +905,9 @@ impl TryFrom<&ArchipelRouterData<&types::SetupMandateRouterData>> for ArchipelAu
                         three_ds: None,
                     }
                 )
-            }
+            },
             // TODO: Implement wallet
+            domain::PaymentMethodData::MandatePayment |
             domain::PaymentMethodData::Wallet(_) |
             domain::PaymentMethodData::CardRedirect(_) |
             domain::PaymentMethodData::PayLater(_) |
@@ -879,7 +915,6 @@ impl TryFrom<&ArchipelRouterData<&types::SetupMandateRouterData>> for ArchipelAu
             domain::PaymentMethodData::BankDebit(_) |
             domain::PaymentMethodData::BankTransfer(_) |
             domain::PaymentMethodData::Crypto(_) |
-            domain::PaymentMethodData::MandatePayment |
             domain::PaymentMethodData::Reward |
             domain::PaymentMethodData::Upi(_) |
             domain::PaymentMethodData::Voucher(_) |
@@ -926,8 +961,7 @@ impl TryFrom<&ArchipelRouterData<&types::SetupMandateRouterData>> for ArchipelAu
             three_ds,
             credential_indicator,
             stored_on_file: true,
-            tenant_id,
-            token_id: None,
+            tenant_id
         })
     }
 }
@@ -947,9 +981,7 @@ impl<F> TryFrom<types::ResponseRouterData<F,
             (item.response.status.clone(), ArchipelPaymentCase::Verify)
         );
 
-        let metadata: Option<serde_json::Value> = ArchipelTransactionMetadata::from(&item.response)
-            .encode_to_value()
-            .ok();
+        let metadata = ArchipelTransactionMetadata::from(&item.response);
 
         let payment_checks: Option<types::ConnectorResponseData> = Some(
             types::ConnectorResponseData::with_additional_payment_method_data(
@@ -966,10 +998,10 @@ impl<F> TryFrom<types::ResponseRouterData<F,
                 charge_id: None,
                 redirection_data: None,
                 mandate_reference: None,
-                connector_metadata: metadata,
-                network_txn_id: None,
-                connector_response_reference_id: None,
-                incremental_authorization_allowed: None,
+                connector_metadata: metadata.encode_to_value().ok(),
+                network_txn_id: Some(item.response.transaction_id.clone()),
+                connector_response_reference_id: Some(item.response.transaction_id.clone()),
+                incremental_authorization_allowed: Some(false),
             }),
             connector_response: payment_checks,
             ..item.data
@@ -1039,10 +1071,6 @@ impl<F> TryFrom<types::ResponseRouterData<F,
         })
     }
 }
-
-
-
-
 
 #[derive(Debug, Serialize, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
