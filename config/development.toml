@@ -136,6 +136,7 @@ cards = [
     "nuvei",
     "opayo",
     "opennode",
+    "paybox",
     "payeezy",
     "payme",
     "payone",
@@ -174,6 +175,10 @@ validity = 1
 [api_keys]
 hash_key = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 
+checksum_auth_context = "TEST"
+checksum_auth_key = "54455354"
+
+
 [connectors]
 aci.base_url = "https://eu-test.oppwa.com/"
 adyen.base_url = "https://checkout-test.adyen.com/"
@@ -181,10 +186,10 @@ adyenplatform.base_url = "https://balanceplatform-api-test.adyen.com/"
 adyen.secondary_base_url = "https://pal-test.adyen.com/"
 airwallex.base_url = "https://api-demo.airwallex.com/"
 applepay.base_url = "https://apple-pay-gateway.apple.com/"
-archipel.base_url = "https://api.archipel.com/"
+archipel.base_url =  "https://<archipel-address>:<archipel-port>/ArchiPEL/"
 authorizedotnet.base_url = "https://apitest.authorize.net/xml/v1/request.api"
 bambora.base_url = "https://api.na.bambora.com"
-bamboraapac.base_url = "https://demo.ippayments.com.au/interface/api/dts.asmx"
+bamboraapac.base_url = "https://demo.ippayments.com.au/interface/api"
 bankofamerica.base_url = "https://apitest.merchant-services.bankofamerica.com/"
 billwerk.base_url = "https://api.reepay.com/"
 billwerk.secondary_base_url = "https://card.reepay.com/"
@@ -225,6 +230,7 @@ noon.key_mode = "Test"
 nuvei.base_url = "https://ppp-test.nuvei.com/"
 opayo.base_url = "https://pi-test.sagepay.com/"
 opennode.base_url = "https://dev-api.opennode.com"
+paybox.base_url = "https://preprod-ppps.paybox.com/PPPS.php"
 payeezy.base_url = "https://api-cert.payeezy.com/"
 payme.base_url = "https://sandbox.payme.io/"
 payone.base_url = "https://payment.preprod.payone.com/"

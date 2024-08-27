@@ -22,16 +22,13 @@ use api_models::{
 };
 use base64::Engine;
 use common_utils::types::keymanager::KeyManagerState;
+#[cfg(all(any(feature = "v1", feature = "v2"), not(feature = "customer_v2")))]
+use common_utils::types::keymanager::{Identifier, ToEncryptable};
 pub use common_utils::{
     crypto,
     ext_traits::{ByteSliceExt, BytesExt, Encode, StringExt, ValueExt},
     fp_utils::when,
     validation::validate_email,
-};
-#[cfg(all(any(feature = "v1", feature = "v2"), not(feature = "customer_v2")))]
-use common_utils::{
-    id_type,
-    types::keymanager::{Identifier, ToEncryptable},
 };
 use error_stack::ResultExt;
 use hyperswitch_domain_models::payments::PaymentIntent;
@@ -369,16 +366,31 @@ pub async fn find_mca_from_authentication_id_type(
             .to_not_found_response(errors::ApiErrorResponse::InternalServerError)?
         }
     };
-    db.find_by_merchant_connector_account_merchant_id_merchant_connector_id(
-        &state.into(),
-        merchant_account.get_id(),
-        &authentication.merchant_connector_id,
-        key_store,
-    )
-    .await
-    .to_not_found_response(errors::ApiErrorResponse::MerchantConnectorAccountNotFound {
-        id: authentication.merchant_connector_id.to_string(),
-    })
+    #[cfg(all(
+        any(feature = "v1", feature = "v2"),
+        not(feature = "merchant_connector_account_v2")
+    ))]
+    {
+        db.find_by_merchant_connector_account_merchant_id_merchant_connector_id(
+            &state.into(),
+            merchant_account.get_id(),
+            &authentication.merchant_connector_id,
+            key_store,
+        )
+        .await
+        .to_not_found_response(
+            errors::ApiErrorResponse::MerchantConnectorAccountNotFound {
+                id: authentication.merchant_connector_id.to_string(),
+            },
+        )
+    }
+    #[cfg(all(feature = "v2", feature = "merchant_connector_account_v2"))]
+    //get mca using id
+    {
+        let _ = key_store;
+        let _ = authentication;
+        todo!()
+    }
 }
 
 pub async fn get_mca_from_payment_intent(
@@ -397,19 +409,37 @@ pub async fn get_mca_from_payment_intent(
         )
         .await
         .to_not_found_response(errors::ApiErrorResponse::PaymentNotFound)?;
-    let key_manager_state = &state.into();
+    let key_manager_state: &KeyManagerState = &state.into();
     match payment_attempt.merchant_connector_id {
-        Some(merchant_connector_id) => db
-            .find_by_merchant_connector_account_merchant_id_merchant_connector_id(
-                key_manager_state,
-                merchant_account.get_id(),
-                &merchant_connector_id,
-                key_store,
-            )
-            .await
-            .to_not_found_response(errors::ApiErrorResponse::MerchantConnectorAccountNotFound {
-                id: merchant_connector_id,
-            }),
+        Some(merchant_connector_id) => {
+            #[cfg(all(
+                any(feature = "v1", feature = "v2"),
+                not(feature = "merchant_connector_account_v2")
+            ))]
+            {
+                db.find_by_merchant_connector_account_merchant_id_merchant_connector_id(
+                    key_manager_state,
+                    merchant_account.get_id(),
+                    &merchant_connector_id,
+                    key_store,
+                )
+                .await
+                .to_not_found_response(
+                    errors::ApiErrorResponse::MerchantConnectorAccountNotFound {
+                        id: merchant_connector_id,
+                    },
+                )
+            }
+            #[cfg(all(feature = "v2", feature = "merchant_connector_account_v2"))]
+            {
+                //get mca using id
+                let _id = merchant_connector_id;
+                let _ = key_store;
+                let _ = key_manager_state;
+                let _ = connector_name;
+                todo!()
+            }
+        }
         None => {
             let profile_id = match payment_intent.profile_id {
                 Some(profile_id) => profile_id,
@@ -425,19 +455,30 @@ pub async fn get_mca_from_payment_intent(
                 .change_context(errors::ApiErrorResponse::InternalServerError)
                 .attach_printable("profile_id is not set in payment_intent")?,
             };
-
-            db.find_merchant_connector_account_by_profile_id_connector_name(
-                key_manager_state,
-                &profile_id,
-                connector_name,
-                key_store,
-            )
-            .await
-            .to_not_found_response(
-                errors::ApiErrorResponse::MerchantConnectorAccountNotFound {
-                    id: format!("profile_id {profile_id} and connector_name {connector_name}"),
-                },
-            )
+            #[cfg(all(
+                any(feature = "v1", feature = "v2"),
+                not(feature = "merchant_connector_account_v2")
+            ))]
+            {
+                db.find_merchant_connector_account_by_profile_id_connector_name(
+                    key_manager_state,
+                    &profile_id,
+                    connector_name,
+                    key_store,
+                )
+                .await
+                .to_not_found_response(
+                    errors::ApiErrorResponse::MerchantConnectorAccountNotFound {
+                        id: format!("profile_id {profile_id} and connector_name {connector_name}"),
+                    },
+                )
+            }
+            #[cfg(all(feature = "v2", feature = "merchant_connector_account_v2"))]
+            {
+                //get mca using id
+                let _ = profile_id;
+                todo!()
+            }
         }
     }
 }
@@ -469,33 +510,64 @@ pub async fn get_mca_from_payout_attempt(
             .await
             .to_not_found_response(errors::ApiErrorResponse::PayoutNotFound)?,
     };
-    let key_manager_state = &state.into();
+    let key_manager_state: &KeyManagerState = &state.into();
     match payout.merchant_connector_id {
-        Some(merchant_connector_id) => db
-            .find_by_merchant_connector_account_merchant_id_merchant_connector_id(
-                key_manager_state,
-                merchant_account.get_id(),
-                &merchant_connector_id,
-                key_store,
-            )
-            .await
-            .to_not_found_response(errors::ApiErrorResponse::MerchantConnectorAccountNotFound {
-                id: merchant_connector_id,
-            }),
-        None => db
-            .find_merchant_connector_account_by_profile_id_connector_name(
-                key_manager_state,
-                &payout.profile_id,
-                connector_name,
-                key_store,
-            )
-            .await
-            .to_not_found_response(errors::ApiErrorResponse::MerchantConnectorAccountNotFound {
-                id: format!(
-                    "profile_id {} and connector_name {}",
-                    payout.profile_id, connector_name
-                ),
-            }),
+        Some(merchant_connector_id) => {
+            #[cfg(all(
+                any(feature = "v1", feature = "v2"),
+                not(feature = "merchant_connector_account_v2")
+            ))]
+            {
+                db.find_by_merchant_connector_account_merchant_id_merchant_connector_id(
+                    key_manager_state,
+                    merchant_account.get_id(),
+                    &merchant_connector_id,
+                    key_store,
+                )
+                .await
+                .to_not_found_response(
+                    errors::ApiErrorResponse::MerchantConnectorAccountNotFound {
+                        id: merchant_connector_id,
+                    },
+                )
+            }
+            #[cfg(all(feature = "v2", feature = "merchant_connector_account_v2"))]
+            {
+                //get mca using id
+                let _id = merchant_connector_id;
+                let _ = key_store;
+                let _ = connector_name;
+                let _ = key_manager_state;
+                todo!()
+            }
+        }
+        None => {
+            #[cfg(all(
+                any(feature = "v1", feature = "v2"),
+                not(feature = "merchant_connector_account_v2")
+            ))]
+            {
+                db.find_merchant_connector_account_by_profile_id_connector_name(
+                    key_manager_state,
+                    &payout.profile_id,
+                    connector_name,
+                    key_store,
+                )
+                .await
+                .to_not_found_response(
+                    errors::ApiErrorResponse::MerchantConnectorAccountNotFound {
+                        id: format!(
+                            "profile_id {} and connector_name {}",
+                            payout.profile_id, connector_name
+                        ),
+                    },
+                )
+            }
+            #[cfg(all(feature = "v2", feature = "merchant_connector_account_v2"))]
+            {
+                todo!()
+            }
+        }
     }
 }
 
@@ -508,17 +580,32 @@ pub async fn get_mca_from_object_reference_id(
 ) -> CustomResult<domain::MerchantConnectorAccount, errors::ApiErrorResponse> {
     let db = &*state.store;
     match merchant_account.default_profile.as_ref() {
-        Some(profile_id) => db
-            .find_merchant_connector_account_by_profile_id_connector_name(
-                &state.into(),
-                profile_id,
-                connector_name,
-                key_store,
-            )
-            .await
-            .to_not_found_response(errors::ApiErrorResponse::MerchantConnectorAccountNotFound {
-                id: format!("profile_id {profile_id} and connector_name {connector_name}"),
-            }),
+        Some(profile_id) => {
+            #[cfg(all(
+                any(feature = "v1", feature = "v2"),
+                not(feature = "merchant_connector_account_v2")
+            ))]
+            {
+                db.find_merchant_connector_account_by_profile_id_connector_name(
+                    &state.into(),
+                    profile_id,
+                    connector_name,
+                    key_store,
+                )
+                .await
+                .to_not_found_response(
+                    errors::ApiErrorResponse::MerchantConnectorAccountNotFound {
+                        id: format!("profile_id {profile_id} and connector_name {connector_name}"),
+                    },
+                )
+            }
+            #[cfg(all(feature = "v2", feature = "merchant_connector_account_v2"))]
+            {
+                let _ = db;
+                let _ = profile_id;
+                todo!()
+            }
+        }
         _ => match object_reference_id {
             webhooks::ObjectReferenceId::PaymentId(payment_id_type) => {
                 get_mca_from_payment_intent(
@@ -677,15 +764,15 @@ pub trait CustomerAddress {
         address_details: payments::AddressDetails,
         key: &[u8],
         storage_scheme: storage::enums::MerchantStorageScheme,
-        merchant_id: id_type::MerchantId,
+        merchant_id: common_utils::id_type::MerchantId,
     ) -> CustomResult<storage::AddressUpdate, common_utils::errors::CryptoError>;
 
     async fn get_domain_address(
         &self,
         state: &SessionState,
         address_details: payments::AddressDetails,
-        merchant_id: &id_type::MerchantId,
-        customer_id: &id_type::CustomerId,
+        merchant_id: &common_utils::id_type::MerchantId,
+        customer_id: &common_utils::id_type::CustomerId,
         key: &[u8],
         storage_scheme: storage::enums::MerchantStorageScheme,
     ) -> CustomResult<domain::CustomerAddress, common_utils::errors::CryptoError>;
@@ -700,7 +787,7 @@ impl CustomerAddress for api_models::customers::CustomerRequest {
         address_details: payments::AddressDetails,
         key: &[u8],
         storage_scheme: storage::enums::MerchantStorageScheme,
-        merchant_id: id_type::MerchantId,
+        merchant_id: common_utils::id_type::MerchantId,
     ) -> CustomResult<storage::AddressUpdate, common_utils::errors::CryptoError> {
         let encrypted_data = batch_encrypt(
             &state.into(),
@@ -736,8 +823,8 @@ impl CustomerAddress for api_models::customers::CustomerRequest {
         &self,
         state: &SessionState,
         address_details: payments::AddressDetails,
-        merchant_id: &id_type::MerchantId,
-        customer_id: &id_type::CustomerId,
+        merchant_id: &common_utils::id_type::MerchantId,
+        customer_id: &common_utils::id_type::CustomerId,
         key: &[u8],
         storage_scheme: storage::enums::MerchantStorageScheme,
     ) -> CustomResult<domain::CustomerAddress, common_utils::errors::CryptoError> {
@@ -784,7 +871,7 @@ impl CustomerAddress for api_models::customers::CustomerRequest {
 pub fn add_apple_pay_flow_metrics(
     apple_pay_flow: &Option<domain::ApplePayFlow>,
     connector: Option<String>,
-    merchant_id: id_type::MerchantId,
+    merchant_id: common_utils::id_type::MerchantId,
 ) {
     if let Some(flow) = apple_pay_flow {
         match flow {
@@ -818,7 +905,7 @@ pub fn add_apple_pay_payment_status_metrics(
     payment_attempt_status: enums::AttemptStatus,
     apple_pay_flow: Option<domain::ApplePayFlow>,
     connector: Option<String>,
-    merchant_id: id_type::MerchantId,
+    merchant_id: common_utils::id_type::MerchantId,
 ) {
     if payment_attempt_status == enums::AttemptStatus::Charged {
         if let Some(flow) = apple_pay_flow {
