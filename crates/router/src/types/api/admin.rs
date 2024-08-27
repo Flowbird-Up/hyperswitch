@@ -15,6 +15,7 @@ use common_utils::{
     ext_traits::{AsyncExt, Encode, ValueExt},
     types::keymanager::Identifier,
 };
+use diesel_models::organization::OrganizationBridge;
 use error_stack::{report, ResultExt};
 use hyperswitch_domain_models::{
     merchant_key_store::MerchantKeyStore, type_encryption::decrypt_optional,
@@ -30,8 +31,8 @@ use crate::{
 impl ForeignFrom<diesel_models::organization::Organization> for OrganizationResponse {
     fn foreign_from(org: diesel_models::organization::Organization) -> Self {
         Self {
-            organization_id: org.org_id,
-            organization_name: org.org_name,
+            organization_id: org.get_organization_id(),
+            organization_name: org.get_organization_name(),
             organization_details: org.organization_details,
             metadata: org.metadata,
             modified_at: org.modified_at,
@@ -91,13 +92,15 @@ impl ForeignTryFrom<domain::MerchantAccount> for MerchantAccountResponse {
     fn foreign_try_from(item: domain::MerchantAccount) -> Result<Self, Self::Error> {
         use common_utils::ext_traits::OptionExt;
 
+        let id = item.get_id().to_owned();
+
         let merchant_name = item
             .merchant_name
             .get_required_value("merchant_name")?
             .into_inner();
 
         Ok(Self {
-            id: item.merchant_id,
+            id,
             merchant_name,
             merchant_details: item.merchant_details,
             publishable_key: item.publishable_key,
