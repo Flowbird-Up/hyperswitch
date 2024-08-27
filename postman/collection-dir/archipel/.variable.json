@@ -109,6 +109,10 @@
     {
       "key": "connector_transaction_id",
       "value": ""
+    },
+    {
+      "key": "archipel_transaction_uuid",
+      "value": ""
     }
   ]
 }

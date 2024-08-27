@@ -2,8 +2,8 @@
   "childrenOrder": [
     "Payments - Create",
     "Payments - Confirm",
-    "List payment methods for a Customer",
     "Payments - Retrieve",
+    "List payment methods for a Customer",
     "Recurring Payments - Create",
     "Payments - Retrieve-copy"
   ]
