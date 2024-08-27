@@ -539,8 +539,9 @@ impl TryFrom<&ArchipelRouterData<&types::PaymentsAuthorizeRouterData>> for Archi
                 })?
             ).ok()
         });
-        // TODO: Determine if we are on saved card payment for CIT too
-        let stored_on_file = is_saved_card_payment;
+
+        let stored_on_file = is_saved_card_payment |
+            item.router_data.request.is_customer_initiated_mandate_payment();
 
         let mut credential_indicator = None;
 
