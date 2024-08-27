@@ -1,17 +1,20 @@
 // Validate status 2xx
-pm.test("[GET]::/payments/:id - Status code is 2xx", function () {
+pm.test("[POST]::/payments/:id/capture - Status code is 2xx", function () {
   pm.response.to.be.success;
 });
 
 // Validate if response header has matching content-type
-pm.test("[GET]::/payments/:id - Content-Type is application/json", function () {
-  pm.expect(pm.response.headers.get("Content-Type")).to.include(
-    "application/json",
-  );
-});
+pm.test(
+  "[POST]::/payments/:id/capture - Content-Type is application/json",
+  function () {
+    pm.expect(pm.response.headers.get("Content-Type")).to.include(
+      "application/json",
+    );
+  },
+);
 
 // Validate if response has JSON Body
-pm.test("[GET]::/payments/:id - Response has JSON Body", function () {
+pm.test("[POST]::/payments/:id/capture - Response has JSON Body", function () {
   pm.response.to.have.jsonBody();
 });
 
@@ -47,12 +50,32 @@ if (jsonData?.client_secret) {
   );
 }
 
-// Response body should have value "cancelled" for "status"
+// Response body should have value "partially_captured" for "status"
 if (jsonData?.status) {
   pm.test(
-    "[POST]::/payments/:id - Content check if value for 'status' matches 'cancelled'",
+    "[POST]:://payments/:id/capture - Content check if value for 'status' matches 'partially_captured'",
     function () {
-      pm.expect(jsonData.status).to.eql("cancelled");
+      pm.expect(jsonData.status).to.eql("partially_captured");
+    },
+  );
+}
+
+// Response body should have value "1001" for "amount"
+if (jsonData?.amount) {
+  pm.test(
+    "[post]:://payments/:id/capture - Content check if value for 'amount' matches '1001'",
+    function () {
+      pm.expect(jsonData.amount).to.eql(1001);
+    },
+  );
+}
+
+// Response body should have value "500" for "amount_received"
+if (jsonData?.amount_received) {
+  pm.test(
+    "[POST]::/payments:id/capture - Content check if value for 'amount_received' matches '500'",
+    function () {
+      pm.expect(jsonData.amount_received).to.eql(500);
     },
   );
 }
