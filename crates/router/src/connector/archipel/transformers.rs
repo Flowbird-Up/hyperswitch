@@ -251,12 +251,10 @@ impl ForeignFrom<Option<CardIssuer>> for ArchipelCardScheme {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "UPPERCASE")]
+#[serde(rename_all = "lowercase")]
 pub enum ArchipelPaymentStatus {
-    Pending,
-    Accepted,
-    Refused,
-    Error,
+    Succeeded,
+    Failed
 }
 impl ForeignTryFrom<(enums::AttemptStatus, enums::CaptureMethod)> for ArchipelPaymentCase {
     type Error = errors::ConnectorError;
@@ -320,50 +318,37 @@ pub enum ArchipelPaymentCase {
 impl ForeignFrom<(ArchipelPaymentStatus, ArchipelPaymentCase)> for enums::AttemptStatus {
     fn foreign_from((status, archipel_flow): (ArchipelPaymentStatus, ArchipelPaymentCase)) -> Self {
         match status {
-            ArchipelPaymentStatus::Accepted => {
+            ArchipelPaymentStatus::Succeeded => {
                 match archipel_flow {
-                    ArchipelPaymentCase::Capture |
+                    ArchipelPaymentCase::Authorize => {
+                        Self::Authorized
+                    },
                     ArchipelPaymentCase::Pay |
-                    ArchipelPaymentCase::Verify => {
+                    ArchipelPaymentCase::Verify |
+                    ArchipelPaymentCase::Capture => {
                         Self::Charged
                     },
                     ArchipelPaymentCase::Cancel => {
                         Self::Voided
                     }
-                    _ => {
-                        Self::Authorized
-                    }
-                }
-            }
-            ArchipelPaymentStatus::Pending => {
-                match archipel_flow {
-                    ArchipelPaymentCase::Capture |
-                    ArchipelPaymentCase::Pay => {
-                        Self::CaptureInitiated
-                    },
-                    ArchipelPaymentCase::Cancel => {
-                        Self::VoidInitiated
-                    }
-                    _ => {
-                        Self::Authorizing
-                    }
                 }
             },
-            ArchipelPaymentStatus::Refused => {
+            ArchipelPaymentStatus::Failed => {
                 match archipel_flow {
+                    ArchipelPaymentCase::Authorize |
+                    ArchipelPaymentCase::Pay => {
+                        Self::AuthorizationFailed
+                    },
+                    ArchipelPaymentCase::Verify => {
+                        Self::AuthenticationFailed
+                    }
                     ArchipelPaymentCase::Capture => {
                         Self::CaptureFailed
                     },
                     ArchipelPaymentCase::Cancel => {
                         Self::VoidFailed
                     }
-                    _ => {
-                        Self::AuthorizationFailed
-                    }
                 }
-            }
-            ArchipelPaymentStatus::Error => {
-                Self::Failure
             }
         }
     }
@@ -431,7 +416,7 @@ pub struct ArchipelPaymentsResponse {
     order: ArchipelOrderResponse,
     transaction_id: String,
     transaction_date: String,
-    status: ArchipelPaymentStatus,
+    transaction_result: ArchipelPaymentStatus,
     error: Option<ArchipelErrorMessage>,
     financial_network_code: Option<String>,
     issuer_transaction_id: Option<String>,
@@ -554,8 +539,9 @@ impl TryFrom<&ArchipelRouterData<&types::PaymentsAuthorizeRouterData>> for Archi
                 })?
             ).ok()
         });
-        // TODO: Determine if we are on saved card payment for CIT too
-        let stored_on_file = is_saved_card_payment;
+
+        let stored_on_file = is_saved_card_payment |
+            item.router_data.request.is_customer_initiated_mandate_payment();
 
         let mut credential_indicator = None;
 
@@ -625,7 +611,7 @@ for types::RouterData<F, types::PaymentsAuthorizeData, types::PaymentsResponseDa
         };
 
         let status = enums::AttemptStatus::foreign_from(
-            (item.response.status.clone(), archipel_flow)
+            (item.response.transaction_result.clone(), archipel_flow)
         );
 
         let metadata: Option<serde_json::Value> = ArchipelTransactionMetadata::from(&item.response)
@@ -690,7 +676,7 @@ impl<F> TryFrom<types::ResponseRouterData<F,
         )?;
 
         let status = enums::AttemptStatus::foreign_from(
-            (item.response.status.clone(), archipel_flow)
+            (item.response.transaction_result.clone(), archipel_flow)
         );
 
         let metadata: Option<serde_json::Value> = ArchipelTransactionMetadata::from(&item.response)
@@ -758,7 +744,9 @@ impl<F> TryFrom<types::ResponseRouterData<F,
         types::PaymentsCaptureData,
         types::PaymentsResponseData>) -> Result<Self,Self::Error> {
 
-        let status = enums::AttemptStatus::foreign_from((item.response.status.clone(), ArchipelPaymentCase::Capture));
+        let status = enums::AttemptStatus::foreign_from(
+            (item.response.transaction_result.clone(), ArchipelPaymentCase::Capture)
+        );
 
         let connector_metadata: Option<serde_json::Value> = ArchipelTransactionMetadata::from(&item.response)
             .encode_to_value()
@@ -978,7 +966,7 @@ impl<F> TryFrom<types::ResponseRouterData<F,
         types::PaymentsResponseData>) -> Result<Self,Self::Error> {
 
         let status = enums::AttemptStatus::foreign_from(
-            (item.response.status.clone(), ArchipelPaymentCase::Verify)
+            (item.response.transaction_result.clone(), ArchipelPaymentCase::Verify)
         );
 
         let metadata = ArchipelTransactionMetadata::from(&item.response);
@@ -1039,7 +1027,7 @@ impl<F> TryFrom<types::ResponseRouterData<F,
     ) -> Result<Self,Self::Error> {
 
         let status = enums::AttemptStatus::foreign_from(
-            (item.response.status.clone(), ArchipelPaymentCase::Cancel)
+            (item.response.transaction_result.clone(), ArchipelPaymentCase::Cancel)
         );
 
         let metadata: Option<serde_json::Value> = ArchipelTransactionMetadata::from(&item.response)
@@ -1083,10 +1071,8 @@ pub struct ArchipelIncrementalAuthorizationRequest {
 impl From<ArchipelPaymentStatus> for enums::AuthorizationStatus {
     fn from(status: ArchipelPaymentStatus) -> Self {
         match status {
-            ArchipelPaymentStatus::Accepted => Self::Success,
-            ArchipelPaymentStatus::Pending => Self::Processing,
-            ArchipelPaymentStatus::Error |
-            ArchipelPaymentStatus::Refused => Self::Failure,
+            ArchipelPaymentStatus::Succeeded => Self::Success,
+            ArchipelPaymentStatus::Failed => Self::Failure,
         }
     }
 }
@@ -1120,7 +1106,7 @@ impl<F> TryFrom<types::ResponseRouterData<F,
         types::PaymentsIncrementalAuthorizationData,
         types::PaymentsResponseData>) -> Result<Self,Self::Error> {
 
-        let status = enums::AuthorizationStatus::from(item.response.status.clone());
+        let status = enums::AuthorizationStatus::from(item.response.transaction_result.clone());
 
         let connector_response: Option<types::ConnectorResponseData> = Some(
             types::ConnectorResponseData::with_additional_payment_method_data(

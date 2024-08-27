@@ -18,6 +18,14 @@ pm.test("[POST]::/payments - Response has JSON Body", function () {
 let jsonData = {};
 try {jsonData = pm.response.json();}catch(e){}
 
+// Response body should have value "requires_capture" for "status"
+pm.test(
+    "[POST]::/payments - Content check if value for 'status' matches 'requires_capture'",
+    function () {
+        pm.expect(jsonData.status).to.eql("requires_capture");
+    },
+);
+
 // pm.collectionVariables - Set payment_id as variable for jsonData.payment_id
 if (jsonData?.payment_id) {
    pm.collectionVariables.set("payment_id", jsonData.payment_id);

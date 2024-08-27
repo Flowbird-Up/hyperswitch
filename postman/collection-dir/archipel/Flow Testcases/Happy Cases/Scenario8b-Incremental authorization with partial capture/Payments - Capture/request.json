@@ -1,15 +1,6 @@
 {
   "method": "POST",
-  "header": [
-    {
-      "key": "Content-Type",
-      "value": "application/json"
-    },
-    {
-      "key": "Accept",
-      "value": "application/json"
-    }
-  ],
+  "header": [],
   "body": {
     "mode": "raw",
     "options": {
@@ -38,6 +29,5 @@
         "description": "(Required) unique payment id"
       }
     ]
-  },
-  "description": "To capture the funds for an uncaptured payment"
+  }
 }
