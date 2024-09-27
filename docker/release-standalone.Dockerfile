@@ -69,7 +69,7 @@ RUN mkdir -p ${BIN_DIR}
 COPY --from=builder /router/target/release/${BINARY} ${BIN_DIR}/${BINARY}
 
 # Add Parkeon root CA to trust
-COPY --from=builder /router/trustsore /usr/local/share/ca-certificates
+COPY --from=builder /router/trustsore/*.crt /usr/local/share/ca-certificates
 RUN update-ca-cetificates
 RUN rm /usr/local/share/ca-certificates/*
 
