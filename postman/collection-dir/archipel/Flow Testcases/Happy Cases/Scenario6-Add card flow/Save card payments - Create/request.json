@@ -25,6 +25,7 @@
       "authentication_type": "no_three_ds",
       "profile_id": "{{profile_id}}",
       "customer_id": "{{customer_id}}",
+      "setup_future_usage": "off_session",
       "description": "[Archipel Connector][Scenario6] - Create payment with already saved card",
       "billing": {
         "address": {
