@@ -38,15 +38,6 @@ pm.test(
 );
 
 pm.test(
-    "[POST]::/account/:account_id/connectors - Validate connector_label",
-    function () {
-        pm.expect(jsonData.connector_label).to.equal(
-            "archipel" + "_" + jsonData.business_country + "_" + jsonData.business_label,
-        );
-    },
-);
-
-pm.test(
     "[POST]::/account/:account_id/connectors - Validate merchant_connector_id",
     function () {
         // pm.collectionVariables - Set merchant_connector_id as variable for jsonData.merchant_connector_id

@@ -38,7 +38,9 @@
       }
     },
     "raw_json_formatted": {
-      "profile_name": "archipel_tenant_1"
+      "profile_name": "eisop_cnp",
+      "is_connector_agnostic_mit_enabled": true,
+      "collect_billing_details_from_wallet_connector": true
     }
   },
   "url": {

@@ -38,8 +38,9 @@
       }
     },
     "raw_json_formatted": {
-      "merchant_id": "{{$randomUUID}}",
-      "merchant_name": "Flowbird Merchant 1",
+      "merchant_id": "flowbird",
+      "organization_id": "{{organization_id}}",
+      "merchant_name": "Flowbird",
       "merchant_details": {
         "primary_contact_person": "Primary Contact Person",
         "primary_email": "primary_email@flowbird.group",
@@ -62,13 +63,7 @@
       "sub_merchants_enabled": false,
       "metadata": {
         "compatible_connector": "archipel"
-      },
-      "primary_business_details": [
-        {
-          "country": "FR",
-          "business": "FLOWBIRD"
-        }
-      ]
+      }
     }
   },
   "url": {

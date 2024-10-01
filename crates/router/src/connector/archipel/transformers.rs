@@ -450,10 +450,17 @@ impl From<&ArchipelPaymentsResponse> for ArchipelTransactionReference {
 impl TryFrom<&ArchipelRouterData<&types::PaymentsAuthorizeRouterData>> for ArchipelAuthorizationRequest  {
     type Error = error_stack::Report<errors::ConnectorError>;
     fn try_from(item: &ArchipelRouterData<&types::PaymentsAuthorizeRouterData>) -> Result<Self,Self::Error> {
+        let is_recurring_payment = item.router_data.request.mandate_id
+            .as_ref()
+            .and_then(|mandate_ids| mandate_ids.mandate_id.as_ref())
+            .is_some();
 
-        let is_recurring_payment = item.router_data.request.get_mandate_id().is_some();
+        let is_subsequent_trx = item.router_data.request.mandate_id
+            .as_ref()
+            .and_then(|mandate_ids| mandate_ids.mandate_reference_id.as_ref())
+            .is_some();
 
-        let is_saved_card_payment = (is_recurring_payment) |
+        let is_saved_card_payment = (item.router_data.request.is_mandate_payment()) |
             (item.router_data.request.get_setup_future_usage() == Some(enums::FutureUsage::OnSession)) |
             (item.router_data.payment_method_status == Some(enums::PaymentMethodStatus::Active));
 
@@ -465,9 +472,9 @@ impl TryFrom<&ArchipelRouterData<&types::PaymentsAuthorizeRouterData>> for Archi
             false => ArchipelPaymentCertainty::Final
         };
 
-        let transaction_initiator = match item.router_data.request.off_session {
-            Some(true) => ArchipelPaymentInitiator::Merchant,
-            _ => ArchipelPaymentInitiator::Customer,
+        let transaction_initiator = match is_recurring_payment {
+            true => ArchipelPaymentInitiator::Merchant,
+            false => ArchipelPaymentInitiator::Customer,
         };
 
         let order = ArchipelOrderRequest {
@@ -543,34 +550,30 @@ impl TryFrom<&ArchipelRouterData<&types::PaymentsAuthorizeRouterData>> for Archi
         let stored_on_file = is_saved_card_payment |
             item.router_data.request.is_customer_initiated_mandate_payment();
 
-        let mut credential_indicator = None;
-
-        if stored_on_file {
-            let indicator_status = match is_recurring_payment {
-                true => ArchipelCredentialIndicatorStatus::Subsequent,
-                false => ArchipelCredentialIndicatorStatus::Initial
-            };
-
-            let transaction_id = item.router_data.request.mandate_id
-                .as_ref()
-                .and_then(|mandate_ids|
-                    match &mandate_ids.mandate_reference_id {
-                        Some(MandateReferenceId::NetworkMandateId(network_trx_id)) => {
-                            Some(network_trx_id.to_string())
-                        }
-                        _ => { None }
-                    }
-                );
-
-            credential_indicator = Some(ArchipelCredentialIndicator {
-                status: indicator_status.clone(),
-                recurring: Some(is_recurring_payment),
-                transaction_id: match indicator_status {
-                    ArchipelCredentialIndicatorStatus::Initial => None,
-                    ArchipelCredentialIndicatorStatus::Subsequent => transaction_id,
-                },
-            })
+        let indicator_status = match is_subsequent_trx {
+            true => ArchipelCredentialIndicatorStatus::Subsequent,
+            false => ArchipelCredentialIndicatorStatus::Initial,
         };
+
+        let transaction_id = item.router_data.request.mandate_id
+            .as_ref()
+            .and_then(|mandate_ids|
+                match &mandate_ids.mandate_reference_id {
+                    Some(MandateReferenceId::NetworkMandateId(network_trx_id)) => {
+                        Some(network_trx_id.to_string())
+                    }
+                    _ => { None }
+                }
+            );
+
+        let credential_indicator = Some(ArchipelCredentialIndicator {
+            status: indicator_status.clone(),
+            recurring: Some(is_recurring_payment),
+            transaction_id: match indicator_status {
+                ArchipelCredentialIndicatorStatus::Initial => None,
+                ArchipelCredentialIndicatorStatus::Subsequent => transaction_id,
+            },
+        });
 
         let tenant_id: String = item.tenant_id.clone();
 
@@ -641,7 +644,7 @@ for types::RouterData<F, types::PaymentsAuthorizeData, types::PaymentsResponseDa
                 redirection_data: None,
                 mandate_reference: None,
                 connector_metadata: metadata,
-                // Save archipel  initial transaction uuid for recurring mandate payment
+                // Save archipel initial transaction uuid for network transaction mit/cit
                 network_txn_id:  match item.data.request.is_customer_initiated_mandate_payment() {
                     true => Some(item.response.transaction_id),
                     false => None
@@ -881,7 +884,7 @@ impl TryFrom<&ArchipelRouterData<&types::SetupMandateRouterData>> for ArchipelAu
                             number: ccard.card_number.clone(),
                             expiry: CardExpiryDate {
                                 month: ccard.card_exp_month.clone(),
-                                year: ccard.get_card_expiry_year_2_digit().unwrap().clone(),
+                                year: ccard.get_card_expiry_year_2_digit()?.clone(),
                             },
                             security_code: ccard.card_cvc.clone(),
                             // TODO: Set with default value. Not yet implemented on HP

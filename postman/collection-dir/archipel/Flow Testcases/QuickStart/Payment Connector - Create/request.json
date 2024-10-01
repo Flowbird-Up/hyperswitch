@@ -40,13 +40,11 @@
     "raw_json_formatted": {
       "connector_type": "payment_processor",
       "connector_name": "archipel",
-      "business_country": "FR",
-      "business_label": "FLOWBIRD",
       "connector_account_details": {
         "auth_type": "NoKey"
       },
       "metadata": {
-        "tenant_id": "1"
+        "tenant_id": "{{archipel_tenant_id}}"
       },
       "profile_id": "{{profile_id}}",
       "test_mode": false,
