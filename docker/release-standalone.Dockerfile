@@ -31,7 +31,7 @@ ENV RUST_BACKTRACE="short"
 # Use cargo's sparse index protocol
 ENV CARGO_REGISTRIES_CRATES_IO_PROTOCOL="sparse"
 
-COPY .. .
+COPY . .
 RUN cargo build --release --features default ${EXTRA_FEATURES}
 
 
@@ -69,8 +69,8 @@ RUN mkdir -p ${BIN_DIR}
 COPY --from=builder /router/target/release/${BINARY} ${BIN_DIR}/${BINARY}
 
 # Add Parkeon root CA to trust
-COPY --from=builder /router/trustsore/*.crt /usr/local/share/ca-certificates
-RUN update-ca-cetificates
+COPY --from=builder /router/truststore/*.crt /usr/local/share/ca-certificates
+RUN update-ca-certificates
 RUN rm /usr/local/share/ca-certificates/*
 
 WORKDIR ${BIN_DIR}
