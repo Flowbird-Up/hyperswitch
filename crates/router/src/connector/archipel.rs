@@ -5,6 +5,7 @@ use serde::Deserialize;
 use common_utils::ext_traits::ValueExt;
 use common_utils::pii::SecretSerdeValue;
 use diesel_models::enums;
+use masking::ExposeInterface;
 use transformers as archipel;
 use crate::{
     configs::settings,
@@ -158,7 +159,7 @@ impl Default for ConnectorMetadata {
 }
 
 fn get_tenant_id(connector_metadata: SecretSerdeValue) -> Result<String, errors::ConnectorError> {
-   /* let connector_meta: ConnectorMetadata = serde_json::from_value(connector_metadata.expose())
+   let connector_meta: ConnectorMetadata = serde_json::from_value(connector_metadata.expose())
         .unwrap_or(ConnectorMetadata::default());
     // TODO: remove debug log
     router_env::debug!(archipel_tenant_id=format!("{:?}", connector_meta));
@@ -170,8 +171,6 @@ fn get_tenant_id(connector_metadata: SecretSerdeValue) -> Result<String, errors:
             config: "Missing tenant_id. Please check your merchant connector account metadata."
         })
     }
-    */
-    Ok("3".to_string())
 }
 
 impl ConnectorIntegration<api::Authorize,
