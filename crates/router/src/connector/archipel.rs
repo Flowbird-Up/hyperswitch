@@ -5,7 +5,6 @@ use serde::Deserialize;
 use common_utils::ext_traits::ValueExt;
 use common_utils::pii::SecretSerdeValue;
 use diesel_models::enums;
-use masking::ExposeInterface;
 use transformers as archipel;
 use crate::{
     configs::settings,
@@ -22,6 +21,7 @@ use crate::{
     utils::BytesExt,
     connector::utils::RouterData
 };
+use crate::connector::utils::PaymentsAuthorizeRequestData;
 
 pub mod transformers;
 
@@ -217,8 +217,15 @@ impl ConnectorIntegration<api::Authorize,
                 req,
                 tenant
             ))?;
-        let connector_req = archipel::ArchipelAuthorizationRequest::try_from(&connector_router_data)?;
-        Ok(RequestContent::Json(Box::new(connector_req)))
+        if req.request.is_wallet() {
+            Ok(RequestContent::Json(Box::new(
+                    archipel::ArchipelWalletAuthorizationRequest::try_from(&connector_router_data)?
+            )))
+        } else {
+            Ok(RequestContent::Json(Box::new(
+                archipel::ArchipelCardAuthorizationRequest::try_from(&connector_router_data)?
+            )))
+        }
     }
 
     fn build_request(&self,
@@ -572,8 +579,9 @@ impl ConnectorIntegration<api::SetupMandate,
                 req,
                 get_tenant_id(req.get_connector_meta()?)?
             ))?;
-        let connector_req = archipel::ArchipelAuthorizationRequest::try_from(&connector_router_data)?;
-        Ok(RequestContent::Json(Box::new(connector_req)))
+        Ok(RequestContent::Json(Box::new(
+            archipel::ArchipelCardAuthorizationRequest::try_from(&connector_router_data)?
+        )))
     }
 
     fn build_request(
