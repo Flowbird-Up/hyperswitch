@@ -633,28 +633,33 @@ impl TryFrom<&ArchipelRouterData<&types::PaymentsAuthorizeRouterData>> for Archi
             false => ArchipelCredentialIndicatorStatus::Initial,
         };
 
-        let transaction_id = item.router_data.request.mandate_id
-            .as_ref()
-            .and_then(|mandate_ids|
-                match &mandate_ids.mandate_reference_id {
-                    Some(MandateReferenceId::NetworkMandateId(network_trx_id)) => {
-                        Some(network_trx_id.to_string())
-                    }
-                    _ => { None }
-                }
-            );
-
-        let credential_indicator = Some(ArchipelCredentialIndicator {
-            status: indicator_status.clone(),
-            recurring: Some(is_recurring_payment),
-            transaction_id: match indicator_status {
-                ArchipelCredentialIndicatorStatus::Initial => None,
-                ArchipelCredentialIndicatorStatus::Subsequent => transaction_id,
-            },
-        });
-
         let stored_on_file = is_saved_card_payment |
             item.router_data.request.is_customer_initiated_mandate_payment();
+
+        let credential_indicator = match stored_on_file {
+            true => {
+                let transaction_id = item.router_data.request.mandate_id
+                    .as_ref()
+                    .and_then(|mandate_ids|
+                        match &mandate_ids.mandate_reference_id {
+                            Some(MandateReferenceId::NetworkMandateId(network_trx_id)) => {
+                                Some(network_trx_id.to_string())
+                            }
+                            _ => { None }
+                        }
+                    );
+
+                Some(ArchipelCredentialIndicator {
+                    status: indicator_status.clone(),
+                    recurring: Some(is_recurring_payment),
+                    transaction_id: match indicator_status {
+                        ArchipelCredentialIndicatorStatus::Initial => None,
+                        ArchipelCredentialIndicatorStatus::Subsequent => transaction_id,
+                    },
+                })
+            },
+            false => None,
+        };
 
         Ok(Self {
             order,
