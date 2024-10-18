@@ -1289,7 +1289,7 @@ for types::RefundsRouterData<api::Execute>
         Ok(Self {
             response: Ok(types::RefundsResponseData {
                 connector_refund_id: item.response.order.id.to_owned(),
-                refund_status: enums::RefundStatus::Pending,
+                refund_status: enums::RefundStatus::from(item.response.transaction_result.clone()),
             }),
             ..item.data
         })
