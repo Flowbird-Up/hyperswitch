@@ -380,9 +380,10 @@ impl ForeignFrom<Option<CardIssuer>> for ArchipelCardScheme {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum ArchipelPaymentStatus {
+    #[default]
     Succeeded,
     Failed
 }
@@ -541,7 +542,6 @@ impl From<&ArchipelTransactionReference> for types::AdditionalPaymentMethodConne
     }
 }
 
-//TODO: Fill the struct with respective fields
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ArchipelPaymentsResponse {
@@ -959,83 +959,6 @@ impl<F> TryFrom<types::ResponseRouterData<F,
     }
 }
 
-/* REFUND FLOW */
-//TODO: Fill the struct with respective fields
-// Type definition for RefundRequest
-#[derive(Default, Debug, Serialize)]
-pub struct ArchipelRefundRequest {
-    pub amount: i64
-}
-
-impl<F> TryFrom<&ArchipelRouterData<&types::RefundsRouterData<F>>> for ArchipelRefundRequest {
-    type Error = error_stack::Report<errors::ConnectorError>;
-    fn try_from(item: &ArchipelRouterData<&types::RefundsRouterData<F>>) -> Result<Self,Self::Error> {
-        Ok(Self {
-            amount: item.amount.to_owned(),
-        })
-    }
-}
-
-// Type definition for Refund Response
-
-#[allow(dead_code)]
-#[derive(Debug, Serialize, Default, Deserialize, Clone)]
-pub enum RefundStatus {
-    Succeeded,
-    Failed,
-    #[default]
-    Processing,
-}
-
-impl From<RefundStatus> for enums::RefundStatus {
-    fn from(item: RefundStatus) -> Self {
-        match item {
-            RefundStatus::Succeeded => Self::Success,
-            RefundStatus::Failed => Self::Failure,
-            RefundStatus::Processing => Self::Pending,
-            //TODO: Review mapping
-        }
-    }
-}
-
-//TODO: Fill the struct with respective fields
-#[derive(Default, Debug, Clone, Serialize, Deserialize)]
-pub struct RefundResponse {
-    id: String,
-    status: RefundStatus
-}
-
-impl TryFrom<types::RefundsResponseRouterData<api::Execute, RefundResponse>>
-for types::RefundsRouterData<api::Execute>
-{
-    type Error = error_stack::Report<errors::ConnectorError>;
-    fn try_from(
-        item: types::RefundsResponseRouterData<api::Execute, RefundResponse>,
-    ) -> Result<Self, Self::Error> {
-        Ok(Self {
-            response: Ok(types::RefundsResponseData {
-                connector_refund_id: item.response.id.to_string(),
-                refund_status: enums::RefundStatus::from(item.response.status),
-            }),
-            ..item.data
-        })
-    }
-}
-
-impl TryFrom<types::RefundsResponseRouterData<api::RSync, RefundResponse>> for types::RefundsRouterData<api::RSync>
-{
-    type Error = error_stack::Report<errors::ConnectorError>;
-    fn try_from(item: types::RefundsResponseRouterData<api::RSync, RefundResponse>) -> Result<Self,Self::Error> {
-        Ok(Self {
-            response: Ok(types::RefundsResponseData {
-                connector_refund_id: item.response.id.to_string(),
-                refund_status: enums::RefundStatus::from(item.response.status),
-            }),
-            ..item.data
-        })
-    }
-}
-
 // Setup Mandate FLow
 impl TryFrom<&ArchipelRouterData<&types::SetupMandateRouterData>> for ArchipelPaymentInformation {
     type Error = error_stack::Report<errors::ConnectorError>;
@@ -1286,6 +1209,105 @@ impl<F> TryFrom<types::ResponseRouterData<F,
                 connector_authorization_id: None
             }),
             connector_response,
+            ..item.data
+        })
+    }
+}
+
+/* REFUND FLOW */
+#[derive(Default, Debug, Serialize)]
+pub struct ArchipelRefundOrder {
+    pub amount: i64,
+    pub currency: enums::Currency,
+}
+#[derive(Default, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArchipelRefundRequest {
+    pub order: ArchipelRefundOrder,
+    pub tenant_id: String,
+}
+
+impl<F> TryFrom<&ArchipelRouterData<&types::RefundsRouterData<F>>> for ArchipelRefundRequest {
+    type Error = error_stack::Report<errors::ConnectorError>;
+    fn try_from(item: &ArchipelRouterData<&types::RefundsRouterData<F>>) -> Result<Self,Self::Error> {
+        Ok(Self {
+            order: ArchipelRefundOrder {
+                amount:  item.amount.to_owned(),
+                currency: item.router_data.request.currency.to_owned(),
+            },
+            tenant_id: item.tenant_id.to_owned(),
+        })
+    }
+}
+
+// Type definition for Refund Response
+
+#[allow(dead_code)]
+#[derive(Debug, Serialize, Default, Deserialize, Clone)]
+#[serde(rename_all = "UPPERCASE")]
+pub enum ArchipelRefundStatus {
+    Accepted,
+    Failed,
+    #[default]
+    Pending,
+}
+
+impl From<ArchipelPaymentStatus> for enums::RefundStatus {
+    fn from(item: ArchipelPaymentStatus) -> Self {
+        match item {
+            ArchipelPaymentStatus::Succeeded => Self::Success,
+            ArchipelPaymentStatus::Failed => Self::Failure,
+
+        }
+    }
+}
+
+//TODO: Fill the struct with respective fields
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+pub struct ArchipelRefundOrderResponse {
+    id: String,
+}
+
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArchipelRefundResponse {
+    order: ArchipelRefundOrderResponse,
+    status: ArchipelRefundStatus,
+    transaction_result: ArchipelPaymentStatus,
+    transaction_id: Option<String>,
+    transaction_date: Option<String>,
+    error: Option<ArchipelErrorMessage>,
+}
+
+impl TryFrom<types::RefundsResponseRouterData<api::Execute, ArchipelRefundResponse>>
+for types::RefundsRouterData<api::Execute>
+{
+    type Error = error_stack::Report<errors::ConnectorError>;
+    fn try_from(
+        item: types::RefundsResponseRouterData<api::Execute, ArchipelRefundResponse>,
+    ) -> Result<Self, Self::Error> {
+        Ok(Self {
+            response: Ok(types::RefundsResponseData {
+                connector_refund_id: item.response.order.id.to_owned(),
+                refund_status: enums::RefundStatus::Pending,
+            }),
+            ..item.data
+        })
+    }
+}
+
+impl TryFrom<types::RefundsResponseRouterData<api::RSync, ArchipelRefundResponse>>
+for types::RefundsRouterData<api::RSync>
+{
+    type Error = error_stack::Report<errors::ConnectorError>;
+    fn try_from(
+        item: types::RefundsResponseRouterData<api::RSync, ArchipelRefundResponse>
+    ) -> Result<Self,Self::Error> {
+        Ok(Self {
+            response: Ok(types::RefundsResponseData {
+                connector_refund_id: item.response.id.to_string(),
+                refund_status: enums::RefundStatus::from(item.response.status),
+            }),
             ..item.data
         })
     }
