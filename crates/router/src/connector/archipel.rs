@@ -630,7 +630,11 @@ impl ConnectorIntegration<api::SetupMandate,
 impl ConnectorIntegration<api::Execute,
     types::RefundsData,
     types::RefundsResponseData, > for Archipel {
-    fn get_headers(&self, req: &types::RefundsRouterData<api::Execute>, connectors: &settings::Connectors,) -> CustomResult<Vec<(String,request::Maskable<String>)>,errors::ConnectorError> {
+    fn get_headers(
+        &self,
+        req: &types::RefundsRouterData<api::Execute>,
+        connectors: &settings::Connectors
+    ) -> CustomResult<Vec<(String,request::Maskable<String>)>,errors::ConnectorError> {
         self.build_headers(req, connectors)
     }
 
@@ -638,8 +642,16 @@ impl ConnectorIntegration<api::Execute,
         self.common_get_content_type()
     }
 
-    fn get_url(&self, _req: &types::RefundsRouterData<api::Execute>, _connectors: &settings::Connectors,) -> CustomResult<String,errors::ConnectorError> {
-        Err(errors::ConnectorError::NotImplemented("get_url method".to_string()).into())
+    fn get_url(
+        &self,
+        req: &types::RefundsRouterData<api::Execute>,
+        connectors: &settings::Connectors,) -> CustomResult<String,errors::ConnectorError> {
+        Ok(format!(
+            "{}{}{}",
+            self.base_url(connectors),
+            "Transaction/v1/refund/",
+            req.request.connector_transaction_id)
+        )
     }
 
     fn get_request_body(&self, req: &types::RefundsRouterData<api::Execute>, _connectors: &settings::Connectors,) -> CustomResult<RequestContent, errors::ConnectorError> {
@@ -672,7 +684,9 @@ impl ConnectorIntegration<api::Execute,
         event_builder: Option<&mut ConnectorEvent>,
         res: Response,
     ) -> CustomResult<types::RefundsRouterData<api::Execute>,errors::ConnectorError> {
-        let response: archipel::RefundResponse = res.response.parse_struct("archipel RefundResponse").change_context(errors::ConnectorError::ResponseDeserializationFailed)?;
+        let response: archipel::ArchipelRefundResponse = res.response
+            .parse_struct("archipel RefundResponse")
+            .change_context(errors::ConnectorError::ResponseDeserializationFailed)?;
         event_builder.map(|i| i.set_response_body(&response));
         router_env::logger::info!(connector_response=?response);
         types::RouterData::try_from(types::ResponseRouterData {
@@ -724,7 +738,9 @@ impl ConnectorIntegration<api::RSync,
         event_builder: Option<&mut ConnectorEvent>,
         res: Response,
     ) -> CustomResult<types::RefundSyncRouterData,errors::ConnectorError,> {
-        let response: archipel::RefundResponse = res.response.parse_struct("archipel RefundSyncResponse").change_context(errors::ConnectorError::ResponseDeserializationFailed)?;
+        let response: archipel::ArchipelRefundResponse = res.response
+            .parse_struct("archipel RefundSyncResponse")
+            .change_context(errors::ConnectorError::ResponseDeserializationFailed)?;
         event_builder.map(|i| i.set_response_body(&response));
         router_env::logger::info!(connector_response=?response);
         types::RouterData::try_from(types::ResponseRouterData {
