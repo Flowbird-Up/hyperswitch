@@ -4,6 +4,7 @@ use api_models::payments::{MandateReferenceId};
 use crate::core::mandate::MandateBehaviour;
 use common_utils::ext_traits::Encode;
 use hyperswitch_domain_models::router_data::PaymentMethodToken;
+use hyperswitch_interfaces::consts;
 use masking::Secret;
 use crate::{core::errors, types::{
     self,
@@ -510,6 +511,15 @@ pub struct ArchipelOrderResponse {
 pub struct ArchipelErrorMessage {
     pub code: String,
     pub description: Option<String>,
+}
+
+impl Default for ArchipelErrorMessage {
+    fn default() -> Self {
+        Self {
+            code: consts::NO_ERROR_CODE.to_string(),
+            description: Some(consts::NO_ERROR_MESSAGE.to_string())
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Eq, PartialEq, Default)]
@@ -1279,6 +1289,15 @@ pub struct ArchipelRefundResponse {
     error: Option<ArchipelErrorMessage>,
 }
 
+impl TryFrom<ArchipelRefundResponse> for types::RefundsResponseData {
+    type Error = error_stack::Report<errors::ConnectorError>;
+    fn try_from(resp: ArchipelRefundResponse) -> Result<Self, Self::Error> {
+        Ok(types::RefundsResponseData {
+            connector_refund_id: resp.transaction_id.ok_or(errors::ConnectorError::ParsingFailed)?.to_owned(),
+            refund_status: enums::RefundStatus::from(resp.transaction_result),
+        })
+    }
+}
 impl TryFrom<types::RefundsResponseRouterData<api::Execute, ArchipelRefundResponse>>
 for types::RefundsRouterData<api::Execute>
 {
@@ -1286,11 +1305,15 @@ for types::RefundsRouterData<api::Execute>
     fn try_from(
         item: types::RefundsResponseRouterData<api::Execute, ArchipelRefundResponse>,
     ) -> Result<Self, Self::Error> {
+
+        let response = if item.response.error.is_none() {
+            Ok(types::RefundsResponseData::try_from(item.response)?)
+        } else {
+            Err(types::ErrorResponse::foreign_from((item.response.error, item.http_code)))
+        };
+
         Ok(Self {
-            response: Ok(types::RefundsResponseData {
-                connector_refund_id: item.response.order.id.to_owned(),
-                refund_status: enums::RefundStatus::from(item.response.transaction_result.clone()),
-            }),
+            response,
             ..item.data
         })
     }
@@ -1303,12 +1326,29 @@ for types::RefundsRouterData<api::RSync>
     fn try_from(
         item: types::RefundsResponseRouterData<api::RSync, ArchipelRefundResponse>
     ) -> Result<Self,Self::Error> {
+        let response = if item.response.error.is_none() {
+            Ok(types::RefundsResponseData::try_from(item.response)?)
+        } else {
+            Err(types::ErrorResponse::foreign_from((item.response.error, item.http_code)))
+        };
+
         Ok(Self {
-            response: Ok(types::RefundsResponseData {
-                connector_refund_id: item.response.id.to_string(),
-                refund_status: enums::RefundStatus::from(item.response.status),
-            }),
+            response,
             ..item.data
         })
+    }
+}
+
+impl ForeignFrom<(Option<ArchipelErrorMessage>, u16)> for types::ErrorResponse {
+    fn foreign_from((archipel_error, http_code): (Option<ArchipelErrorMessage>, u16)) -> Self {
+        let error = archipel_error.unwrap_or_default();
+        Self {
+            status_code: http_code,
+            code: error.code.clone(),
+            attempt_status: None,
+            connector_transaction_id: None,
+            message: error.description.clone().unwrap_or(consts::NO_ERROR_MESSAGE.to_string()),
+            reason: error.description.clone(),
+        }
     }
 }

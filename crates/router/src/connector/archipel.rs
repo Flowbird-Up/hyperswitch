@@ -6,6 +6,7 @@ use common_utils::ext_traits::ValueExt;
 use common_utils::pii::SecretSerdeValue;
 use diesel_models::enums;
 use masking::ExposeInterface;
+use pm_auth::consts;
 use transformers as archipel;
 use crate::{
     configs::settings,
@@ -161,8 +162,6 @@ impl Default for ConnectorMetadata {
 fn get_tenant_id(connector_metadata: SecretSerdeValue) -> Result<String, errors::ConnectorError> {
    let connector_meta: ConnectorMetadata = serde_json::from_value(connector_metadata.expose())
         .unwrap_or(ConnectorMetadata::default());
-    // TODO: remove debug log
-    router_env::debug!(archipel_tenant_id=format!("{:?}", connector_meta));
     if !connector_meta.tenant_id.is_none() {
         Ok(connector_meta.tenant_id.unwrap())
     }
@@ -696,8 +695,41 @@ impl ConnectorIntegration<api::Execute,
         })
     }
 
-    fn get_error_response(&self, res: Response, event_builder: Option<&mut ConnectorEvent>) -> CustomResult<ErrorResponse,errors::ConnectorError> {
-        self.build_error_response(res, event_builder)
+    fn get_error_response(
+        &self,
+        res: Response,
+        event_builder: Option<&mut ConnectorEvent>
+    ) -> CustomResult<ErrorResponse,errors::ConnectorError> {
+        let archipel_error: CustomResult<
+            archipel::ArchipelErrorMessage,
+            errors::ParsingError
+        > = res.response.parse_struct("ArchipelErrorMessage");
+
+        match archipel_error {
+            Ok(err) => {
+                event_builder.map(|i| i.set_error_response_body(&err));
+                router_env::logger::info!(connector_response=?err);
+
+                Ok(ErrorResponse {
+                    status_code: res.status_code,
+                    code: err.code.clone(),
+                    attempt_status: None,
+                    connector_transaction_id: None,
+                    reason: err.description.clone(),
+                    message: err.description.unwrap_or(
+                        consts::NO_ERROR_MESSAGE.to_string()
+                    ).clone()
+                })
+            }
+            Err(error) => {
+                event_builder.map(|event| event.set_error(serde_json::json!({
+                    "error": res.response.escape_ascii().to_string(),
+                    "status_code": res.status_code
+                })));
+                router_env::logger::error!(deserialization_error=?error);
+                crate::utils::handle_json_response_deserialization_failure(res, "archipel")
+            }
+        }
     }
 }
 
@@ -712,8 +744,21 @@ impl ConnectorIntegration<api::RSync,
         self.common_get_content_type()
     }
 
-    fn get_url(&self, _req: &types::RefundSyncRouterData,_connectors: &settings::Connectors,) -> CustomResult<String,errors::ConnectorError> {
-        Err(errors::ConnectorError::NotImplemented("get_url method".to_string()).into())
+    fn get_url(
+        &self,
+        req: &types::RefundSyncRouterData,
+        connectors: &settings::Connectors,
+    ) -> CustomResult<String,errors::ConnectorError> {
+        let metadata: archipel::ArchipelTransactionMetadata = req.request.connector_metadata.clone()
+            .unwrap()
+            .parse_value("ArchipelTransactionMetadata")
+            .change_context(errors::ConnectorError::MissingConnectorTransactionID)?;
+
+        Ok(format!("{}{}{}",
+                   self.base_url(connectors),
+                   "Transaction/v1/transactions/",
+                   metadata.transaction_id)
+        )
     }
 
     fn build_request(
