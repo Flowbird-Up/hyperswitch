@@ -9,6 +9,9 @@
     "Scenario6-Add card flow",
     "Scenario7-Void the payment",
     "Scenario8a-Incremental authorization",
-    "Scenario8b-Incremental authorization with partial capture"
+    "Scenario8b-Incremental authorization with partial capture",
+    "Scenario9a-Refund full payment",
+    "Scenario9b-Refund partial payment",
+    "Scenario9b-Refund full incremented payment"
   ]
 }
