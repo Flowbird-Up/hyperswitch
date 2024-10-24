@@ -113,6 +113,10 @@
     {
       "key": "archipel_transaction_uuid",
       "value": ""
+    },
+    {
+      "key": "organization_id",
+      "value": ""
     }
   ]
 }
