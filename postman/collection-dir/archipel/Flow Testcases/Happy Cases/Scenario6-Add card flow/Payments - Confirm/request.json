@@ -51,7 +51,7 @@
           "card_network": "Visa"
         }
       },
-      "setup_future_usage": "on_session",
+      "setup_future_usage": "off_session",
       "customer_acceptance": {
         "acceptance_type": "offline",
         "accepted_at": "{{$isoTimestamp}}",

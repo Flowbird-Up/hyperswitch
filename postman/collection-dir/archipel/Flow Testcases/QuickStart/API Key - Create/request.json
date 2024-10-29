@@ -28,7 +28,7 @@
   "body": {
     "mode": "raw",
     "raw_json_formatted": {
-      "name": "archipel_connector_test_key",
+      "name": "archipel_connector_dev_key",
       "description": "Api key used to test payments with archipel connector",
       "expiration": "2099-09-23T01:02:03.000Z"
     }

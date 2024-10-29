@@ -1,5 +1,6 @@
 {
   "childrenOrder": [
+    "Organization - Create",
     "Merchant Account - Create",
     "Business Profile - Create",
     "Payment Connector - Create",

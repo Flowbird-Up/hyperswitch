@@ -11,7 +11,7 @@
       "type": "string"
     },
     {
-      "key": "organization_id",
+      "key": "archipel_tenant_id",
       "value": "",
       "type": "string"
     },
@@ -112,6 +112,10 @@
     },
     {
       "key": "archipel_transaction_uuid",
+      "value": ""
+    },
+    {
+      "key": "organization_id",
       "value": ""
     }
   ]

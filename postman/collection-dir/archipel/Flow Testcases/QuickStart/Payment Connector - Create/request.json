@@ -40,13 +40,39 @@
     "raw_json_formatted": {
       "connector_type": "payment_processor",
       "connector_name": "archipel",
-      "business_country": "FR",
-      "business_label": "FLOWBIRD",
       "connector_account_details": {
         "auth_type": "NoKey"
       },
       "metadata": {
-        "tenant_id": "1"
+        "tenant_id": "{{archipel_tenant_id}}",
+        "apple_pay_combined": {
+          "manual": {
+            "session_token_data": {
+              "initiative": "web",
+              "certificate": "",
+              "display_name": "Flowbird",
+              "certificate_keys": "",
+              "initiative_context": "",
+              "merchant_identifier": "",
+              "merchant_business_country": "",
+              "payment_processing_details_at": "Hyperswitch",
+              "payment_processing_certificate": "",
+              "payment_processing_certificate_key": ""
+            },
+            "payment_request_data": {
+              "label": "Flowbird",
+              "supported_networks": [
+                "visa",
+                "masterCard",
+                "amex",
+                "discover"
+              ],
+              "merchant_capabilities": [
+                "supports3DS"
+              ]
+            }
+          }
+        }
       },
       "profile_id": "{{profile_id}}",
       "test_mode": false,
@@ -57,6 +83,7 @@
           "payment_method_types": [
             {
               "payment_method_type": "credit",
+              "payment_experience": null,
               "card_networks": [
                 "AmericanExpress",
                 "Discover",
@@ -77,6 +104,7 @@
             },
             {
               "payment_method_type": "debit",
+              "payment_experience": null,
               "card_networks": [
                 "AmericanExpress",
                 "Discover",
@@ -93,6 +121,32 @@
               "minimum_amount": 1,
               "maximum_amount": 68607706,
               "recurring_enabled": true,
+              "installment_payment_enabled": true
+            }
+          ]
+        },
+        {
+          "payment_method": "wallet",
+          "payment_method_types": [
+            {
+              "payment_method_type": "apple_pay",
+              "payment_experience": null,
+              "card_networks": [
+                "AmericanExpress",
+                "Discover",
+                "Interac",
+                "JCB",
+                "Mastercard",
+                "Visa",
+                "DinersClub",
+                "UnionPay",
+                "RuPay"
+              ],
+              "accepted_currencies": null,
+              "accepted_countries": null,
+              "minimum_amount": 1,
+              "maximum_amount": 68607706,
+              "recurring_enabled": false,
               "installment_payment_enabled": true
             }
           ]
