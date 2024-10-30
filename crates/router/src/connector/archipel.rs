@@ -1,11 +1,8 @@
 use std::fmt::Debug;
 use error_stack::{report, ResultExt};
 use http::StatusCode;
-use serde::Deserialize;
 use common_utils::ext_traits::ValueExt;
-use common_utils::pii::SecretSerdeValue;
 use diesel_models::enums;
-use masking::ExposeInterface;
 use pm_auth::consts;
 use transformers as archipel;
 use crate::{
@@ -20,8 +17,7 @@ use crate::{
         ErrorResponse, RequestContent,
         Response
     },
-    utils::BytesExt,
-    connector::utils::RouterData
+    utils::BytesExt
 };
 use crate::connector::utils::PaymentsAuthorizeRequestData;
 
@@ -146,32 +142,6 @@ impl ConnectorValidation for Archipel {
     }
 }
 
-#[derive(Debug, Deserialize)]
-struct ConnectorMetadata {
-    tenant_id: Option<String>
-}
-
-impl Default for ConnectorMetadata {
-    fn default() -> Self { 
-        ConnectorMetadata { 
-            tenant_id: None
-        } 
-    }
-}
-
-fn get_tenant_id(connector_metadata: SecretSerdeValue) -> Result<String, errors::ConnectorError> {
-   let connector_meta: ConnectorMetadata = serde_json::from_value(connector_metadata.expose())
-        .unwrap_or(ConnectorMetadata::default());
-    if !connector_meta.tenant_id.is_none() {
-        Ok(connector_meta.tenant_id.unwrap())
-    }
-    else {
-        Err(errors::ConnectorError::InvalidConnectorConfig {
-            config: "Missing tenant_id. Please check your merchant connector account metadata."
-        })
-    }
-}
-
 impl ConnectorIntegration<api::Authorize,
     types::PaymentsAuthorizeData,
     types::PaymentsResponseData, > for Archipel {
@@ -187,14 +157,18 @@ impl ConnectorIntegration<api::Authorize,
 
     fn get_url(&self,
                req: &types::PaymentsAuthorizeRouterData,
-               connectors: &settings::Connectors, ) -> CustomResult<String, errors::ConnectorError> {
-        let capture_method = req.request.capture_method.ok_or(errors::ConnectorError::CaptureMethodNotSupported)?;
+               _connectors: &settings::Connectors, ) -> CustomResult<String, errors::ConnectorError> {
+        let capture_method = req.request.capture_method
+            .ok_or(errors::ConnectorError::CaptureMethodNotSupported)?;
+        let config = transformers::ArchipelConfigData::try_from(
+            &req.connector_meta_data
+        )?;
         match capture_method {
             enums::CaptureMethod::Automatic => {
-                Ok(format!("{}{}", self.base_url(connectors), "Transaction/v1/pay"))
+                Ok(format!("{}{}", config.platform_url, "/pay"))
             },
             enums::CaptureMethod::Manual => {
-                Ok(format!("{}{}", self.base_url(connectors), "Transaction/v1/authorize"))
+                Ok(format!("{}{}", config.platform_url, "/authorize"))
             }
             enums::CaptureMethod::ManualMultiple
             | enums::CaptureMethod::Scheduled => {
@@ -206,18 +180,17 @@ impl ConnectorIntegration<api::Authorize,
     fn get_request_body(&self,
                         req: &types::PaymentsAuthorizeRouterData,
                         _connectors: &settings::Connectors,) -> CustomResult<RequestContent, errors::ConnectorError> {
-        let tenant = get_tenant_id(req.get_connector_meta()?)?;
         let connector_router_data =
             archipel::ArchipelRouterData::try_from((
                 &self.get_currency_unit(),
                 req.request.currency,
                 req.request.amount,
                 req,
-                tenant
+                transformers::ArchipelConfigData::try_from(&req.connector_meta_data)?.tenant_id
             ))?;
         if req.request.is_wallet() {
             Ok(RequestContent::Json(Box::new(
-                    archipel::ArchipelWalletAuthorizationRequest::try_from(&connector_router_data)?
+                archipel::ArchipelWalletAuthorizationRequest::try_from(&connector_router_data)?
             )))
         } else {
             Ok(RequestContent::Json(Box::new(
@@ -264,19 +237,23 @@ impl ConnectorIntegration<api::Authorize,
         })
     }
 
-    fn get_error_response(&self,
-                          res: Response,
-                          event_builder: Option<&mut ConnectorEvent>) -> CustomResult<ErrorResponse,errors::ConnectorError> {
+    fn get_error_response(&self, res: Response, event_builder: Option<&mut ConnectorEvent>)
+        -> CustomResult<ErrorResponse,errors::ConnectorError> {
         self.build_error_response(res, event_builder)
     }
 
-    fn get_5xx_error_response(&self, res: Response, event_builder: Option<&mut ConnectorEvent>) -> CustomResult<ErrorResponse, errors::ConnectorError> {
+    fn get_5xx_error_response(&self, res: Response, event_builder: Option<&mut ConnectorEvent>)
+        -> CustomResult<ErrorResponse, errors::ConnectorError> {
         let response: archipel::ArchipelErrorMessage = res
             .response
             .parse_struct("ArchipelErrorMessage")
             .change_context(errors::ConnectorError::ResponseDeserializationFailed)?;
 
-        event_builder.map(|i| i.set_response_body(&serde_json::from_slice(&res.response).unwrap_or("").to_string()));
+        event_builder.map(|i|
+            i.set_response_body(
+                &serde_json::from_slice(&res.response).unwrap_or("").to_string()
+            )
+        );
         router_env::logger::info!(connector_response=?response);
 
         Ok(ErrorResponse {
@@ -309,13 +286,14 @@ impl ConnectorIntegration<api::IncrementalAuthorization,
     fn get_url(
         &self,
         req: &types::PaymentsIncrementalAuthorizationRouterData,
-        connectors: &settings::Connectors,
+        _connectors: &settings::Connectors,
     ) -> CustomResult<String, errors::ConnectorError> {
         let connector_payment_id = req.request.connector_transaction_id.clone();
-        Ok(format!("{}{}{}",
-                   self.base_url(connectors),
-                   "Transaction/v1/incrementAuthorization/",
-                   connector_payment_id
+        Ok(format!(
+            "{}{}{}",
+            transformers::ArchipelConfigData::try_from(&req.connector_meta_data)?.platform_url,
+            "/incrementAuthorization/",
+            connector_payment_id
         ))
     }
 
@@ -329,7 +307,7 @@ impl ConnectorIntegration<api::IncrementalAuthorization,
             req.request.currency,
             req.request.additional_amount,
             req,
-            get_tenant_id(req.get_connector_meta()?)?
+            transformers::ArchipelConfigData::try_from(&req.connector_meta_data)?.tenant_id
         ))?;
         let connector_request =
             archipel::ArchipelIncrementalAuthorizationRequest::try_from(
@@ -403,15 +381,17 @@ impl ConnectorIntegration<api::PSync,
     fn get_url(
         &self,
         req: &types::PaymentsSyncRouterData,
-        connectors: &settings::Connectors,
+        _connectors: &settings::Connectors,
     ) -> CustomResult<String, errors::ConnectorError> {
         let metadata: archipel::ArchipelTransactionMetadata = req.request.connector_meta.clone()
             .unwrap()
             .parse_value("ArchipelTransactionMetadata")
             .change_context(errors::ConnectorError::MissingConnectorTransactionID)?;
-        Ok(format!("{}{}{}", self.base_url(connectors),
-                   "Transaction/v1/transactions/",
-                   metadata.transaction_id)
+        Ok(format!(
+            "{}{}{}",
+            transformers::ArchipelConfigData::try_from(&req.connector_meta_data)?.platform_url,
+            "/transactions/",
+            metadata.transaction_id)
         )
     }
 
@@ -476,11 +456,13 @@ impl ConnectorIntegration<api::Capture,
     fn get_url(
         &self,
         req: &types::PaymentsCaptureRouterData,
-        connectors: &settings::Connectors,
+        _connectors: &settings::Connectors,
     ) -> CustomResult<String, errors::ConnectorError> {
-        Ok(format!("{}{}{}", self.base_url(connectors),
-                "Transaction/v1/capture/",
-                req.request.connector_transaction_id)
+        Ok(format!(
+            "{}{}{}",
+            transformers::ArchipelConfigData::try_from(&req.connector_meta_data)?.platform_url,
+            "/capture/",
+            req.request.connector_transaction_id)
         )
     }
 
@@ -495,7 +477,7 @@ impl ConnectorIntegration<api::Capture,
                 req.request.currency,
                 req.request.amount_to_capture,
                 req,
-                get_tenant_id(req.get_connector_meta()?)?
+                transformers::ArchipelConfigData::try_from(&req.connector_meta_data)?.tenant_id,
             ))?;
         let connector_req = archipel::ArchipelCaptureRequest::try_from(&connector_router_data)?;
         Ok(RequestContent::Json(Box::new(connector_req)))
@@ -561,9 +543,12 @@ impl ConnectorIntegration<api::SetupMandate,
     }
 
     fn get_url(&self,
-               _req: &types::SetupMandateRouterData,
-               connectors: &settings::Connectors, ) -> CustomResult<String, errors::ConnectorError> {
-        Ok(format!("{}{}", self.base_url(connectors), "Transaction/v1/verify"))
+               req: &types::SetupMandateRouterData,
+               _connectors: &settings::Connectors, ) -> CustomResult<String, errors::ConnectorError> {
+        Ok(format!(
+            "{}{}",
+            transformers::ArchipelConfigData::try_from(&req.connector_meta_data)?.platform_url,
+            "/verify"))
     }
 
     fn get_request_body(&self,
@@ -575,7 +560,7 @@ impl ConnectorIntegration<api::SetupMandate,
                 req.request.currency,
                 0,
                 req,
-                get_tenant_id(req.get_connector_meta()?)?
+                transformers::ArchipelConfigData::try_from(&req.connector_meta_data)?.tenant_id,
             ))?;
         Ok(RequestContent::Json(Box::new(
             archipel::ArchipelCardAuthorizationRequest::try_from(&connector_router_data)?
@@ -644,11 +629,11 @@ impl ConnectorIntegration<api::Execute,
     fn get_url(
         &self,
         req: &types::RefundsRouterData<api::Execute>,
-        connectors: &settings::Connectors,) -> CustomResult<String,errors::ConnectorError> {
+        _connectors: &settings::Connectors,) -> CustomResult<String,errors::ConnectorError> {
         Ok(format!(
             "{}{}{}",
-            self.base_url(connectors),
-            "Transaction/v1/refund/",
+            transformers::ArchipelConfigData::try_from(&req.connector_meta_data)?.platform_url,
+            "/refund/",
             req.request.connector_transaction_id)
         )
     }
@@ -660,7 +645,7 @@ impl ConnectorIntegration<api::Execute,
                 req.request.currency,
                 req.request.refund_amount,
                 req,
-                get_tenant_id(req.get_connector_meta()?)?
+                transformers::ArchipelConfigData::try_from(&req.connector_meta_data)?.tenant_id,
             ))?;
         let connector_req = archipel::ArchipelRefundRequest::try_from(&connector_router_data)?;
         Ok(RequestContent::Json(Box::new(connector_req)))
@@ -747,7 +732,7 @@ impl ConnectorIntegration<api::RSync,
     fn get_url(
         &self,
         req: &types::RefundSyncRouterData,
-        connectors: &settings::Connectors,
+        _connectors: &settings::Connectors,
     ) -> CustomResult<String,errors::ConnectorError> {
         let metadata: archipel::ArchipelTransactionMetadata = req.request.connector_metadata.clone()
             .unwrap()
@@ -755,7 +740,7 @@ impl ConnectorIntegration<api::RSync,
             .change_context(errors::ConnectorError::MissingConnectorTransactionID)?;
 
         Ok(format!("{}{}{}",
-                   self.base_url(connectors),
+                   transformers::ArchipelConfigData::try_from(&req.connector_meta_data)?.platform_url,
                    "Transaction/v1/transactions/",
                    metadata.transaction_id)
         )
@@ -832,13 +817,12 @@ impl ConnectorIntegration<api::Void,
             self.common_get_content_type()
         }
 
-        fn get_url(&self,
-                   req: &types::PaymentsCancelRouterData,
-                   connectors: &settings::Connectors) -> CustomResult<String, errors::ConnectorError> {
+        fn get_url(&self, req: &types::PaymentsCancelRouterData, _connectors: &settings::Connectors)
+            -> CustomResult<String, errors::ConnectorError> {
             Ok(format!(
                 "{}{}{}",
-                self.base_url(connectors),
-                "Transaction/v1/cancel/",
+                transformers::ArchipelConfigData::try_from(&req.connector_meta_data)?.platform_url,
+                "/cancel/",
                 req.request.connector_transaction_id)
             )
         }
@@ -846,7 +830,6 @@ impl ConnectorIntegration<api::Void,
         fn get_request_body(&self,
                             req: &types::PaymentsCancelRouterData,
                             _connectors: &settings::Connectors,) -> CustomResult<RequestContent, errors::ConnectorError> {
-            let tenant = get_tenant_id(req.get_connector_meta()?)?;
             let connector_router_data =
                 archipel::ArchipelRouterData::try_from((
                     &self.get_currency_unit(),
@@ -861,7 +844,7 @@ impl ConnectorIntegration<api::Void,
                             field_name: "Amount",
                         })?,
                     req,
-                    tenant
+                    transformers::ArchipelConfigData::try_from(&req.connector_meta_data)?.tenant_id,
                 ));
             let connector_req = archipel::ArchipelPaymentsCancelRequest::try_from(&connector_router_data?)?;
             Ok(RequestContent::Json(Box::new(connector_req)))

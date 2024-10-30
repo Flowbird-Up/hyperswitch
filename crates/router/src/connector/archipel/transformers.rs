@@ -1,8 +1,10 @@
 use bytes::Bytes;
+use error_stack::ResultExt;
 use serde::{Deserialize, Serialize};
 use api_models::payments::{MandateReferenceId};
 use crate::core::mandate::MandateBehaviour;
 use common_utils::ext_traits::Encode;
+use common_utils::pii;
 use hyperswitch_domain_models::router_data::PaymentMethodToken;
 use hyperswitch_interfaces::consts;
 use masking::Secret;
@@ -56,6 +58,24 @@ impl TryFrom<&types::ConnectorAuthType> for ArchipelAuthType  {
         }
     }
 }
+
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
+pub struct ArchipelConfigData {
+    pub tenant_id: String,
+    pub platform_url: String,
+}
+
+impl TryFrom<&Option<pii::SecretSerdeValue>> for ArchipelConfigData {
+    type Error = error_stack::Report<errors::ConnectorError>;
+    fn try_from(connector_metadata: &Option<pii::SecretSerdeValue>) -> Result<Self, Self::Error> {
+        let config_data = utils::to_connector_meta_from_secret::<Self>(connector_metadata.clone())
+            .change_context(errors::ConnectorError::InvalidConnectorConfig {
+                config: "metadata. Required fields: tenant_id, platform_url",
+            })?;
+        Ok(config_data)
+    }
+}
+
 
 #[derive(Debug, Default, Serialize, Eq, PartialEq, Clone)]
 #[serde(rename_all = "UPPERCASE")]
