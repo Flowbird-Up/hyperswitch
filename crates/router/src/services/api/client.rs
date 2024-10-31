@@ -106,6 +106,19 @@ pub fn create_client(
                 .change_context(ApiClientError::ClientConstructionFailed)
                 .attach_printable("Failed to construct client with certificate and certificate key")
         }
+        (Some(encoded_certificate), None) => {
+            let client_builder = get_client_builder(proxy_config, should_bypass_proxy)?;
+            let certificate_list = payments::helpers::create_certificate(encoded_certificate)?;
+            let client_builder = certificate_list
+                .into_iter()
+                .fold(client_builder, |client_builder, certificate| {
+                    client_builder.add_root_certificate(certificate)
+                });
+            client_builder
+                .build()
+                .change_context(ApiClientError::ClientConstructionFailed)
+                .attach_printable("Failed to construct client with CA certificate")
+        },
         _ => get_base_client(proxy_config, should_bypass_proxy),
     }
 }

@@ -1614,6 +1614,21 @@ impl<'a> ConnectorAuthTypeValidation<'a> {
                             .to_string(),
                 })?;
                 Ok(())
+            },
+            hyperswitch_domain_models::router_data::ConnectorAuthType::CaCertificateAuth {
+                ca_certificate,
+            } => {
+                helpers::create_certificate(
+                    ca_certificate.to_owned(),
+                )
+                    .change_context(errors::ApiErrorResponse::InvalidDataFormat {
+                        field_name:
+                        "connector_account_details.ca_certificate".to_string(),
+                        expected_format:
+                        "a valid base64 encoded string of PEM encoded CA Certificate"
+                            .to_string(),
+                    })?;
+                Ok(())
             }
             hyperswitch_domain_models::router_data::ConnectorAuthType::NoKey => Ok(()),
         }
