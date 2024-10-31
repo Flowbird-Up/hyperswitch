@@ -48,15 +48,15 @@ impl<T> TryFrom<(&api::CurrencyUnit, enums::Currency, i64, T, String)> for Archi
 }
 
 pub struct ArchipelAuthType {
-    pub x_ca_cert: Secret<String>,
+    pub ca_cert: Secret<String>,
 }
 
 impl TryFrom<&types::ConnectorAuthType> for ArchipelAuthType  {
     type Error = error_stack::Report<errors::ConnectorError>;
     fn try_from(auth_type: &types::ConnectorAuthType) -> Result<Self, Self::Error> {
         match auth_type {
-            types::ConnectorAuthType::CaCertificateAuth { ca_certificate} => Ok(Self {
-                x_ca_cert: ca_certificate.clone()
+            types::ConnectorAuthType::PeerAuth { ca_certificate} => Ok(Self {
+                ca_cert: ca_certificate.clone()
             }),
             _ => Err(errors::ConnectorError::FailedToObtainAuthType.into()),
         }

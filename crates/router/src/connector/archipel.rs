@@ -207,7 +207,6 @@ impl ConnectorIntegration<api::Authorize,
         let auth = archipel::ArchipelAuthType::try_from(&req.connector_auth_type)?;
         Ok(Some(
             services::RequestBuilder::new()
-                .add_certificate(Some(auth.x_ca_cert))
                 .method(services::Method::Post)
                 .url(&types::PaymentsAuthorizeType::get_url(
                     self, req, connectors,
@@ -217,6 +216,7 @@ impl ConnectorIntegration<api::Authorize,
                     self, req, connectors,
                 )?)
                 .set_body(types::PaymentsAuthorizeType::get_request_body(self, req, connectors)?)
+                .add_certificate(Some(auth.ca_cert))
                 .build(),
         ))
     }

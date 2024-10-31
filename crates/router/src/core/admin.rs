@@ -1615,7 +1615,7 @@ impl<'a> ConnectorAuthTypeValidation<'a> {
                 })?;
                 Ok(())
             },
-            hyperswitch_domain_models::router_data::ConnectorAuthType::CaCertificateAuth {
+            hyperswitch_domain_models::router_data::ConnectorAuthType::PeerAuth {
                 ca_certificate,
             } => {
                 helpers::create_certificate(
