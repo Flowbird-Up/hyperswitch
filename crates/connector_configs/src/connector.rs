@@ -104,6 +104,8 @@ pub struct ConfigMetadata {
     pub source_balance_account: Option<MetaDataInupt>,
     pub brand_id: Option<MetaDataInupt>,
     pub destination_account_number: Option<MetaDataInupt>,
+    pub tenant_id: Option<MetaDataInupt>,
+    pub platform_url: Option<MetaDataInupt>,
 }
 
 #[serde_with::skip_serializing_none]
