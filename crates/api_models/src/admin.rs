@@ -905,6 +905,9 @@ pub enum ConnectorAuthType {
         certificate: Secret<String>,
         private_key: Secret<String>,
     },
+    PeerAuth {
+        ca_certificate: Secret<String>,
+    },
     #[default]
     NoKey,
 }

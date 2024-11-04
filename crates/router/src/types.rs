@@ -691,6 +691,11 @@ impl ForeignFrom<api_models::admin::ConnectorAuthType> for ConnectorAuthType {
                 certificate,
                 private_key,
             },
+            api_models::admin::ConnectorAuthType::PeerAuth {
+                ca_certificate,
+            } => Self::PeerAuth {
+                ca_certificate,
+            },
         }
     }
 }
@@ -731,6 +736,11 @@ impl ForeignFrom<ConnectorAuthType> for api_models::admin::ConnectorAuthType {
             } => Self::CertificateAuth {
                 certificate,
                 private_key,
+            },
+            ConnectorAuthType::PeerAuth {
+                ca_certificate,
+            } => Self::PeerAuth {
+                ca_certificate,
             },
         }
     }
