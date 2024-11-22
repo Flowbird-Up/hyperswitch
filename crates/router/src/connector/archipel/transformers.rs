@@ -6,6 +6,7 @@ use crate::core::mandate::MandateBehaviour;
 use common_utils::ext_traits::Encode;
 use common_utils::pii;
 use hyperswitch_domain_models::router_data::PaymentMethodToken;
+use hyperswitch_domain_models::router_request_types::AuthenticationData;
 use hyperswitch_interfaces::consts;
 use masking::Secret;
 use crate::{core::errors, types::{
@@ -150,7 +151,7 @@ pub struct Archipel3DS {
     #[serde(rename="3DSAuthDate")]
     three_ds_auth_date: Option<String>,
     #[serde(rename="3DSAuthAmt")]
-    three_ds_auth_amt: Option<u32>,
+    three_ds_auth_amt: Option<i64>,
     #[serde(rename="3DSAuthStatus")]
     three_ds_auth_status: Option<ThreeDsAuthStatus>,
     #[serde(rename="3DSMaxSupportedVersion")]
@@ -160,6 +161,38 @@ pub struct Archipel3DS {
     authentication_value: Option<Secret<String>>,
     authentication_method: Option<Secret<String>>,
     eci: Option<Secret<String>>,
+}
+
+impl TryFrom<AuthenticationData> for Archipel3DS {
+
+    type Error = error_stack::Report<errors::ConnectorError>;
+    fn try_from(authentication_data: Option<AuthenticationData>) -> Result<Self, Self::Error> {
+
+        let three_ds_data = authentication_data.ok_or(
+            errors::ConnectorError::MissingRequiredField {
+                field_name: "Authentication_data"
+            }
+        )?;
+
+        Ok(Self {
+            // Todo: Missing filed from HS AuthenticationData
+            acs_trans_id: None,
+            ds_trans_id: three_ds_data.ds_trans_id.and_then(| ds_trans_id | Some(Secret::new(ds_trans_id))),
+            // Not currently used by ArchiPEL
+            three_ds_requestor_name: None,
+            // Todo: Missing filed from HS AuthenticationData
+            three_ds_auth_date: None,
+            three_ds_auth_amt: None,
+            // Todo: Missing filed from HS AuthenticationData
+            three_ds_auth_status: None,
+            three_ds_max_supported_version: Some("2.2.0".to_string()),
+            three_ds_version: Some(three_ds_data.message_version.to_string()),
+            authentication_value: Some(Secret::new(three_ds_data.cavv)),
+            // Not currently used by ArchiPEL
+            authentication_method: None,
+            eci: three_ds_data.eci.and_then(| eci | Some(Secret::new(eci)))
+        })
+    }
 }
 
 #[derive(Debug, Serialize, Eq, PartialEq)]
@@ -734,8 +767,12 @@ impl TryFrom<&ArchipelRouterData<&types::PaymentsAuthorizeRouterData>> for Archi
             }
         };
 
-        // TODO: implement 3DS
-        let three_ds = None;
+        let three_ds: Option<Archipel3DS> = match item.router_data.request.enrolled_for_3ds {
+            true => Some(Archipel3DS::try_from(
+                item.router_data.request.get_authentication_data()?.clone()
+            )?),
+            _ => None
+        };
 
         Ok(Self {
             order: payment_information.order,
@@ -782,15 +819,12 @@ impl TryFrom<&ArchipelRouterData<&types::PaymentsAuthorizeRouterData>> for Archi
             }
         };
 
-        // TODO: implement 3DS
-        let three_ds = None;
-
         Ok(Self {
             order: payment_information.order,
             cardholder: payment_information.cardholder,
             card: payment_method_data.card_data.clone(),
             wallet: payment_method_data.wallet_information.clone(),
-            three_ds,
+            three_ds: None,
             credential_indicator: payment_information.credential_indicator,
             stored_on_file: payment_information.stored_on_file,
             tenant_id: item.tenant_id.clone(),
@@ -1047,14 +1081,11 @@ impl TryFrom<&ArchipelRouterData<&types::SetupMandateRouterData>> for ArchipelCa
             }
         };
 
-        // TODO: implement 3DS
-        let three_ds = None;
-
         Ok(Self {
             order: payment_information.order,
             cardholder: payment_information.cardholder,
             card: card_data,
-            three_ds,
+            three_ds: None,
             credential_indicator: payment_information.credential_indicator,
             stored_on_file: payment_information.stored_on_file,
             tenant_id: item.tenant_id.to_owned(),

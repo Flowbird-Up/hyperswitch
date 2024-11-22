@@ -212,7 +212,6 @@ impl Connector {
             | Self::Adyenplatform
             | Self::Airwallex
             | Self::Authorizedotnet
-            | Self::Archipel
             | Self::Bambora
             | Self::Bamboraapac
             | Self::Bankofamerica
@@ -272,7 +271,7 @@ impl Connector {
             | Self::Netcetera
             | Self::Noon
             | Self::Stripe => false,
-            Self::Checkout | Self::Nmi | Self::Cybersource => true,
+            Self::Checkout | Self::Nmi | Self::Cybersource | Self::Archipel => true,
         }
     }
     pub fn is_pre_processing_required_before_authorize(&self) -> bool {
