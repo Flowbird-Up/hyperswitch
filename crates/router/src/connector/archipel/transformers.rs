@@ -166,14 +166,7 @@ pub struct Archipel3DS {
 impl TryFrom<AuthenticationData> for Archipel3DS {
 
     type Error = error_stack::Report<errors::ConnectorError>;
-    fn try_from(authentication_data: Option<AuthenticationData>) -> Result<Self, Self::Error> {
-
-        let three_ds_data = authentication_data.ok_or(
-            errors::ConnectorError::MissingRequiredField {
-                field_name: "Authentication_data"
-            }
-        )?;
-
+    fn try_from(three_ds_data: AuthenticationData) -> Result<Self, Self::Error> {
         Ok(Self {
             // Todo: Missing filed from HS AuthenticationData
             acs_trans_id: None,
@@ -767,7 +760,7 @@ impl TryFrom<&ArchipelRouterData<&types::PaymentsAuthorizeRouterData>> for Archi
             }
         };
 
-        let three_ds: Option<Archipel3DS> = match item.router_data.request.enrolled_for_3ds {
+        let three_ds: Option<Archipel3DS> = match item.router_data.is_three_ds() {
             true => Some(Archipel3DS::try_from(
                 item.router_data.request.get_authentication_data()?.clone()
             )?),
