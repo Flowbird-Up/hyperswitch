@@ -75,9 +75,9 @@ pub use hyperswitch_connectors::connectors::{
 #[cfg(feature = "dummy_connector")]
 pub use self::dummyconnector::DummyConnector;
 pub use self::{
-    aci::Aci, adyen::Adyen, adyenplatform::Adyenplatform, airwallex::Airwallex,
-    authorizedotnet::Authorizedotnet, archipel::Archipel, bamboraapac::Bamboraapac,
-    bankofamerica::Bankofamerica, billwerk::Billwerk, bluesnap::Bluesnap, boku::Boku, braintree::Braintree,
+    aci::Aci, adyen::Adyen, adyenplatform::Adyenplatform, airwallex::Airwallex, archipel::Archipel,
+    authorizedotnet::Authorizedotnet, bamboraapac::Bamboraapac, bankofamerica::Bankofamerica,
+    billwerk::Billwerk, bluesnap::Bluesnap, boku::Boku, braintree::Braintree,
     cashtocode::Cashtocode, checkout::Checkout, coinbase::Coinbase, cryptopay::Cryptopay,
     cybersource::Cybersource, datatrans::Datatrans, dlocal::Dlocal, ebanx::Ebanx, forte::Forte,
     globalpay::Globalpay, globepay::Globepay, gocardless::Gocardless, gpayments::Gpayments,
