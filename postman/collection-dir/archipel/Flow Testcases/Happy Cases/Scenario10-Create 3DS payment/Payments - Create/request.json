@@ -18,56 +18,26 @@
       }
     },
     "raw_json_formatted": {
-      "amount": 0,
-      "currency": "EUR",
+      "amount": 500,
+      "amount_to_capture": 500,
+      "currency": "USD",
       "confirm": false,
       "capture_method": "automatic",
-      "customer_id": "{{customer_id}}",
+      "authentication_type": "three_ds",
+      "request_external_three_ds_authentication": true,
       "profile_id": "{{profile_id}}",
-      "description": "[Archipel Connector][Variation Cases][Scenario6] - Create mandate",
-      "payment_method": "card",
-      "payment_method_data": {
-        "card": {
-          "card_cvc": "123",
-          "card_exp_month": "01",
-          "card_exp_year": "50",
-          "card_holder_name": "John Doe",
-          "card_number": "5185570141917102",
-          "card_network": "Visa"
-        }
-      },
-      "setup_future_usage": "off_session",
-      "mandate_data": {
-        "customer_acceptance": {
-          "acceptance_type": "offline",
-          "accepted_at": "1963-05-03T04:07:52.723Z",
-          "online": {
-            "ip_address": "127.0.0.1",
-            "user_agent": "amet irure esse"
-          }
-        },
-        "mandate_type": {
-          "single_use": {
-            "amount": 1000,
-            "currency": "EUR"
-          }
-        }
-      },
-      "customer_acceptance": {
-        "acceptance_type": "offline",
-        "accepted_at": "1963-05-03T04:07:52.723Z",
-        "online": {
-          "ip_address": "127.0.0.1",
-          "user_agent": "amet irure esse"
-        }
-      },
+      "email": "john_doe@gmail.com",
+      "name": "John Doe",
+      "phone": "8056594427",
+      "phone_country_code": "+91",
+      "description": "{{$randomLoremSentence}}",
       "billing": {
         "address": {
           "line1": "2 ter",
           "line2": "rue du château",
           "line3": "",
           "city": "Neuilly-sur-Seine",
-          "state": "France",
+          "state": "FRA",
           "zip": "92200",
           "country": "FR"
         },
