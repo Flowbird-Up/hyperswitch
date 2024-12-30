@@ -43,10 +43,10 @@ if (jsonData?.client_secret) {
 };
 
 
-// Response body should have value "processing" for "status"
+// Response body should have value "succeeded" for "status"
 if (jsonData?.status) {
-pm.test("[POST]::/payments - Content check if value for 'status' matches 'processing'", function() {
-  pm.expect(jsonData.status).to.eql("processing");
+pm.test("[POST]::/payments - Content check if value for 'status' matches 'succeeded'", function() {
+  pm.expect(jsonData.status).to.eql("succeeded");
 })};
 
 // Response body should have "mandate_id"

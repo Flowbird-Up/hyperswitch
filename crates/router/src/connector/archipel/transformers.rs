@@ -168,32 +168,31 @@ pub struct Archipel3DS {
     #[serde(rename = "3DSAuthStatus")]
     three_ds_auth_status: Option<ThreeDsAuthStatus>,
     #[serde(rename = "3DSMaxSupportedVersion")]
-    three_ds_max_supported_version: Option<String>,
+    three_ds_max_supported_version: String,
     #[serde(rename = "3DSVersion")]
-    three_ds_version: Option<String>,
-    authentication_value: Option<Secret<String>>,
+    three_ds_version: String,
+    authentication_value: Secret<String>,
     authentication_method: Option<Secret<String>>,
     eci: Option<Secret<String>>,
 }
 
-impl TryFrom<AuthenticationData> for Archipel3DS {
-
-    type Error = error_stack::Report<errors::ConnectorError>;
-    fn try_from(three_ds_data: AuthenticationData) -> Result<Self, Self::Error> {
-        Ok(Self {
-            // Todo: Missing filed from HS AuthenticationData
+impl From<AuthenticationData> for Archipel3DS {
+    fn from(three_ds_data: AuthenticationData) -> Self {
+        Self {
             acs_trans_id: None,
-            ds_trans_id: three_ds_data.ds_trans_id.and_then(| ds_trans_id | Some(Secret::new(ds_trans_id))),
+            ds_trans_id: three_ds_data.ds_trans_id.and_then(| ds_trans_id |
+                Some(Secret::new(ds_trans_id))
+            ),
             three_ds_requestor_name: None,
             three_ds_auth_date: None,
             three_ds_auth_amt: None,
             three_ds_auth_status: None,
-            three_ds_max_supported_version: Some("2.2.0".to_string()),
-            three_ds_version: Some(three_ds_data.message_version.to_string()),
-            authentication_value: Some(Secret::new(three_ds_data.cavv)),
+            three_ds_max_supported_version: "2.2.0".to_string(),
+            three_ds_version: three_ds_data.message_version.to_string(),
+            authentication_value: Secret::new(three_ds_data.cavv),
             authentication_method: None,
             eci: three_ds_data.eci.and_then(| eci | Some(Secret::new(eci)))
-        })
+        }
     }
 }
 
@@ -762,11 +761,10 @@ impl TryFrom<ArchipelRouterData<&types::PaymentsAuthorizeRouterData>>
             }
         };
 
-        let three_ds: Option<Archipel3DS> = match item.router_data.is_three_ds() {
-            true => Some(Archipel3DS::try_from(
-                item.router_data.request.get_authentication_data()?.clone()
-            )?),
-            _ => None
+        let three_ds: Option<Archipel3DS> = if item.router_data.is_three_ds() {
+            Some(Archipel3DS::from(item.router_data.request.get_authentication_data()?))
+        } else {
+            None
         };
 
         Ok(Self {
