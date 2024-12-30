@@ -180,9 +180,7 @@ impl From<AuthenticationData> for Archipel3DS {
     fn from(three_ds_data: AuthenticationData) -> Self {
         Self {
             acs_trans_id: None,
-            ds_trans_id: three_ds_data.ds_trans_id.and_then(| ds_trans_id |
-                Some(Secret::new(ds_trans_id))
-            ),
+            ds_trans_id: three_ds_data.ds_trans_id.map(| ds_trans_id | Secret::new(ds_trans_id)),
             three_ds_requestor_name: None,
             three_ds_auth_date: None,
             three_ds_auth_amt: None,
@@ -191,7 +189,7 @@ impl From<AuthenticationData> for Archipel3DS {
             three_ds_version: three_ds_data.message_version.to_string(),
             authentication_value: Secret::new(three_ds_data.cavv),
             authentication_method: None,
-            eci: three_ds_data.eci.and_then(| eci | Some(Secret::new(eci)))
+            eci: three_ds_data.eci.map(| eci | Secret::new(eci))
         }
     }
 }
