@@ -16,6 +16,7 @@ use common_utils::ext_traits::Encode;
 use common_utils::pii;
 use error_stack::ResultExt;
 use hyperswitch_domain_models::router_data::PaymentMethodToken;
+use hyperswitch_domain_models::router_request_types::AuthenticationData;
 use hyperswitch_interfaces::consts;
 use masking::Secret;
 use serde::{Deserialize, Serialize};
@@ -163,16 +164,34 @@ pub struct Archipel3DS {
     #[serde(rename = "3DSAuthDate")]
     three_ds_auth_date: Option<String>,
     #[serde(rename = "3DSAuthAmt")]
-    three_ds_auth_amt: Option<u32>,
+    three_ds_auth_amt: Option<i64>,
     #[serde(rename = "3DSAuthStatus")]
     three_ds_auth_status: Option<ThreeDsAuthStatus>,
     #[serde(rename = "3DSMaxSupportedVersion")]
-    three_ds_max_supported_version: Option<String>,
+    three_ds_max_supported_version: String,
     #[serde(rename = "3DSVersion")]
-    three_ds_version: Option<String>,
-    authentication_value: Option<Secret<String>>,
+    three_ds_version: String,
+    authentication_value: Secret<String>,
     authentication_method: Option<Secret<String>>,
     eci: Option<Secret<String>>,
+}
+
+impl From<AuthenticationData> for Archipel3DS {
+    fn from(three_ds_data: AuthenticationData) -> Self {
+        Self {
+            acs_trans_id: None,
+            ds_trans_id: three_ds_data.ds_trans_id.map(| ds_trans_id | Secret::new(ds_trans_id)),
+            three_ds_requestor_name: None,
+            three_ds_auth_date: None,
+            three_ds_auth_amt: None,
+            three_ds_auth_status: None,
+            three_ds_max_supported_version: "2.2.0".to_string(),
+            three_ds_version: three_ds_data.message_version.to_string(),
+            authentication_value: Secret::new(three_ds_data.cavv),
+            authentication_method: None,
+            eci: three_ds_data.eci.map(| eci | Secret::new(eci))
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Eq, PartialEq)]
@@ -740,8 +759,11 @@ impl TryFrom<ArchipelRouterData<&types::PaymentsAuthorizeRouterData>>
             }
         };
 
-        // TODO: implement 3DS
-        let three_ds = None;
+        let three_ds: Option<Archipel3DS> = if item.router_data.is_three_ds() {
+            Some(Archipel3DS::from(item.router_data.request.get_authentication_data()?))
+        } else {
+            None
+        };
 
         Ok(Self {
             order: payment_information.order,
@@ -796,15 +818,12 @@ impl TryFrom<ArchipelRouterData<&types::PaymentsAuthorizeRouterData>>
             }
         };
 
-        // TODO: implement 3DS
-        let three_ds = None;
-
         Ok(Self {
             order: payment_information.order,
             cardholder: payment_information.cardholder,
             card: payment_method_data.card_data.clone(),
             wallet: payment_method_data.wallet_information.clone(),
-            three_ds,
+            three_ds: None,
             credential_indicator: payment_information.credential_indicator,
             stored_on_file: payment_information.stored_on_file,
             tenant_id,
@@ -1104,14 +1123,11 @@ impl TryFrom<ArchipelRouterData<&types::SetupMandateRouterData>>
             ))?,
         };
 
-        // TODO: implement 3DS
-        let three_ds = None;
-
         Ok(Self {
             order: payment_information.order,
             cardholder: payment_information.cardholder,
             card: card_data,
-            three_ds,
+            three_ds: None,
             credential_indicator: payment_information.credential_indicator,
             stored_on_file: payment_information.stored_on_file,
             tenant_id,

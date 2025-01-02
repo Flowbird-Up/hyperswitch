@@ -20,21 +20,11 @@
     "raw_json_formatted": {
       "amount": 500,
       "amount_to_capture": 500,
-      "currency": "EUR",
-      "confirm": true,
+      "currency": "USD",
+      "confirm": false,
       "capture_method": "automatic",
-      "authentication_type": "no_three_ds",
-      "payment_method": "card",
-      "payment_method_type": "credit",
-      "payment_method_data": {
-        "card": {
-          "card_cvc": "123",
-          "card_exp_month": "01",
-          "card_exp_year": "50",
-          "card_holder_name": null,
-          "card_number": "5185570141917102"
-        }
-      },
+      "authentication_type": "three_ds",
+      "request_external_three_ds_authentication": true,
       "profile_id": "{{profile_id}}",
       "email": "john_doe@gmail.com",
       "name": "John Doe",
@@ -47,7 +37,7 @@
           "line2": "rue du château",
           "line3": "",
           "city": "Neuilly-sur-Seine",
-          "state": "France",
+          "state": "FRA",
           "zip": "92200",
           "country": "FR"
         },
@@ -72,9 +62,7 @@
           "number": "8056594427",
           "country_code": "+91"
         }
-      },
-      "statement_descriptor_name": "Joseph Doe",
-      "statement_descriptor_suffix": "JS"
+      }
     }
   },
   "url": {

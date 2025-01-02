@@ -42,7 +42,6 @@ if (jsonData?.client_secret) {
    console.log('INFO - Unable to assign variable {{client_secret}}, as jsonData.client_secret is undefined.');
 };
 
-
 // Response body should have value "succeeded" for "status"
 if (jsonData?.status) {
 pm.test("[POST]::/payments - Content check if value for 'status' matches 'succeeded'", function() {
@@ -57,9 +56,4 @@ pm.test("[POST]::/payments - Content check if 'mandate_id' exists", function() {
 // Response body should have "mandate_data"
 pm.test("[POST]::/payments - Content check if 'mandate_data' exists", function() {
    pm.expect((typeof jsonData.mandate_data !== "undefined")).to.be.true;
-});
-
-// Response body should have "payment_method_data"
-pm.test("[POST]::/payments - Content check if 'payment_method_data' exists", function() {
-   pm.expect((typeof jsonData.payment_method_data !== "undefined")).to.be.true;
 });

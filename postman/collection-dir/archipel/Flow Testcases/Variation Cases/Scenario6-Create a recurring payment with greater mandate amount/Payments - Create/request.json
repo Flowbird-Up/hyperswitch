@@ -20,7 +20,7 @@
     "raw_json_formatted": {
       "amount": 0,
       "currency": "EUR",
-      "confirm": true,
+      "confirm": false,
       "capture_method": "automatic",
       "customer_id": "{{customer_id}}",
       "profile_id": "{{profile_id}}",
