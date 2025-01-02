@@ -1,6 +1,7 @@
 pub mod aci;
 pub mod adyen;
 pub mod adyenplatform;
+pub mod archipel;
 pub mod authorizedotnet;
 pub mod bamboraapac;
 pub mod bankofamerica;
@@ -64,14 +65,14 @@ pub use hyperswitch_connectors::connectors::{
 #[cfg(feature = "dummy_connector")]
 pub use self::dummyconnector::DummyConnector;
 pub use self::{
-    aci::Aci, adyen::Adyen, adyenplatform::Adyenplatform, authorizedotnet::Authorizedotnet,
-    bamboraapac::Bamboraapac, bankofamerica::Bankofamerica, bluesnap::Bluesnap, boku::Boku,
-    braintree::Braintree, checkout::Checkout, cybersource::Cybersource, datatrans::Datatrans,
-    ebanx::Ebanx, globalpay::Globalpay, gocardless::Gocardless, gpayments::Gpayments,
-    iatapay::Iatapay, itaubank::Itaubank, klarna::Klarna, mifinity::Mifinity, netcetera::Netcetera,
-    nmi::Nmi, noon::Noon, nuvei::Nuvei, opayo::Opayo, opennode::Opennode, paybox::Paybox,
-    payme::Payme, payone::Payone, paypal::Paypal, placetopay::Placetopay, plaid::Plaid,
-    prophetpay::Prophetpay, rapyd::Rapyd, riskified::Riskified, signifyd::Signifyd, stripe::Stripe,
-    threedsecureio::Threedsecureio, trustpay::Trustpay, wellsfargo::Wellsfargo,
-    wellsfargopayout::Wellsfargopayout, wise::Wise,
+    aci::Aci, adyen::Adyen, adyenplatform::Adyenplatform, archipel::Archipel,
+    authorizedotnet::Authorizedotnet, bamboraapac::Bamboraapac, bankofamerica::Bankofamerica,
+    bluesnap::Bluesnap, boku::Boku, braintree::Braintree, checkout::Checkout,
+    cybersource::Cybersource, datatrans::Datatrans, ebanx::Ebanx, globalpay::Globalpay,
+    gocardless::Gocardless, gpayments::Gpayments, iatapay::Iatapay, itaubank::Itaubank,
+    klarna::Klarna, mifinity::Mifinity, netcetera::Netcetera, nmi::Nmi, noon::Noon, nuvei::Nuvei,
+    opayo::Opayo, opennode::Opennode, paybox::Paybox, payme::Payme, payone::Payone, paypal::Paypal,
+    placetopay::Placetopay, plaid::Plaid, prophetpay::Prophetpay, rapyd::Rapyd,
+    riskified::Riskified, signifyd::Signifyd, stripe::Stripe, threedsecureio::Threedsecureio,
+    trustpay::Trustpay, wellsfargo::Wellsfargo, wellsfargopayout::Wellsfargopayout, wise::Wise,
 };

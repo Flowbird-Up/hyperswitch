@@ -185,6 +185,7 @@ adyenplatform.base_url = "https://balanceplatform-api-test.adyen.com/"
 airwallex.base_url = "https://api-demo.airwallex.com/"
 amazonpay.base_url = "https://pay-api.amazon.com/v2"
 applepay.base_url = "https://apple-pay-gateway.apple.com/"
+archipel.base_url = "https://api.archipel.com/"
 authorizedotnet.base_url = "https://apitest.authorize.net/xml/v1/request.api"
 bambora.base_url = "https://api.na.bambora.com"
 bamboraapac.base_url = "https://demo.ippayments.com.au/interface/api"
@@ -309,6 +310,7 @@ rewards = ["cashtocode", "zen"]
 cards = [
   "adyen",
   "adyenplatform",
+  "archipel",
   "authorizedotnet",
   "coinbase",
   "cryptopay",
@@ -521,7 +523,7 @@ open_banking_uk = { country = "DE,GB,AT,BE,CY,EE,ES,FI,FR,GR,HR,IE,IT,LT,LU,LV,M
 upi_collect = { country = "IN", currency = "INR" }
 
 [pm_filters.plaid]
-open_banking_pis = {currency = "EUR,GBP"}
+open_banking_pis = { currency = "EUR,GBP" }
 
 [pm_filters.zen]
 credit = { not_available_flows = { capture_method = "manual" } }
@@ -755,7 +757,7 @@ sdk_eligible_payment_methods = "card"
 
 [multitenancy]
 enabled = false
-global_tenant = { schema = "public", redis_key_prefix = "", clickhouse_database = "default"}
+global_tenant = { schema = "public", redis_key_prefix = "", clickhouse_database = "default" }
 
 [multitenancy.tenants]
 public = { base_url = "http://localhost:8080", schema = "public", redis_key_prefix = "", clickhouse_database = "default" } # schema -> Postgres db schema, redis_key_prefix -> redis key distinguisher, base_url -> url of the tenant
