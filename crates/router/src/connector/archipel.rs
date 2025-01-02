@@ -282,7 +282,7 @@ impl ConnectorIntegration<api::Authorize, types::PaymentsAuthorizeData, types::P
                     .to_string(),
             )
         });
-        router_env::logger::info!(connector_response=?response);
+        router_env::logger::error!(connector_response=?response);
 
         Ok(ErrorResponse {
             status_code: res.status_code,
