@@ -331,11 +331,11 @@ impl ConnectorData {
                 // enums::Connector::Amazonpay => {
                 //     Ok(ConnectorEnum::Old(Box::new(connector::Amazonpay)))
                 // }
-                enums::Connector::Authorizedotnet => {
-                    Ok(ConnectorEnum::Old(Box::new(&connector::Authorizedotnet)))
-                }
                 enums::Connector::Archipel => {
                     Ok(ConnectorEnum::Old(Box::new(&connector::Archipel)))
+                }
+                enums::Connector::Authorizedotnet => {
+                    Ok(ConnectorEnum::Old(Box::new(&connector::Authorizedotnet)))
                 }
                 enums::Connector::Bambora => Ok(ConnectorEnum::Old(Box::new(&connector::Bambora))),
                 enums::Connector::Bamboraapac => {

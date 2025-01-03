@@ -1,9 +1,23 @@
-use crate::connector::archipel::transformers::{
-    ArchipelAmount, ArchipelCaptureRequest, ArchipelConfigData, ArchipelRouterData,
+use std::fmt::Debug;
+
+use common_utils::ext_traits::ValueExt;
+use diesel_models::enums;
+use error_stack::{report, ResultExt};
+use http::StatusCode;
+use pm_auth::consts;
+use transformers::{
+    self as archipel, ArchipelCardAuthorizationRequest, ArchipelIncrementalAuthorizationRequest,
+    ArchipelPaymentsCancelRequest, ArchipelRefundRequest, ArchipelWalletAuthorizationRequest,
 };
-use crate::connector::utils::PaymentsAuthorizeRequestData;
+
 use crate::{
     configs::settings,
+    connector::{
+        archipel::transformers::{
+            ArchipelAmount, ArchipelCaptureRequest, ArchipelConfigData, ArchipelRouterData,
+        },
+        utils::PaymentsAuthorizeRequestData,
+    },
     core::errors::{self, CustomResult},
     events::connector_api_logs::ConnectorEvent,
     headers,
@@ -18,15 +32,6 @@ use crate::{
         ErrorResponse, RequestContent, Response,
     },
     utils::BytesExt,
-};
-use common_utils::ext_traits::ValueExt;
-use diesel_models::enums;
-use error_stack::{report, ResultExt};
-use http::StatusCode;
-use pm_auth::consts;
-use std::fmt::Debug;
-use transformers::{
-    self as archipel, ArchipelCardAuthorizationRequest, ArchipelIncrementalAuthorizationRequest, ArchipelPaymentsCancelRequest, ArchipelRefundRequest, ArchipelWalletAuthorizationRequest
 };
 
 pub mod transformers;

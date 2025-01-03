@@ -1,25 +1,30 @@
-use crate::connector::utils;
-use crate::connector::utils::{
-    AddressData, AddressDetailsData, ApplePayDecrypt, CardData, CardIssuer,
-    PaymentsAuthorizeRequestData, RouterData,
-};
-use crate::core::mandate::MandateBehaviour;
-use crate::types::domain;
-use crate::{
-    core::errors,
-    types::{self, api, storage::enums, transformers::ForeignFrom, transformers::ForeignTryFrom},
-    unimplemented_payment_method,
-};
 use api_models::payments::MandateReferenceId;
 use bytes::Bytes;
-use common_utils::ext_traits::Encode;
-use common_utils::pii;
+use common_utils::{ext_traits::Encode, pii};
 use error_stack::ResultExt;
-use hyperswitch_domain_models::router_data::PaymentMethodToken;
-use hyperswitch_domain_models::router_request_types::AuthenticationData;
+use hyperswitch_domain_models::{
+    router_data::PaymentMethodToken, router_request_types::AuthenticationData,
+};
 use hyperswitch_interfaces::consts;
 use masking::Secret;
 use serde::{Deserialize, Serialize};
+
+use crate::{
+    connector::{
+        utils,
+        utils::{
+            AddressData, AddressDetailsData, ApplePayDecrypt, CardData, CardIssuer,
+            PaymentsAuthorizeRequestData, RouterData,
+        },
+    },
+    core::{errors, mandate::MandateBehaviour},
+    types::{
+        self, api, domain,
+        storage::enums,
+        transformers::{ForeignFrom, ForeignTryFrom},
+    },
+    unimplemented_payment_method,
+};
 
 #[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone)]
 #[serde(transparent)]
@@ -180,7 +185,7 @@ impl From<AuthenticationData> for Archipel3DS {
     fn from(three_ds_data: AuthenticationData) -> Self {
         Self {
             acs_trans_id: None,
-            ds_trans_id: three_ds_data.ds_trans_id.map(| ds_trans_id | Secret::new(ds_trans_id)),
+            ds_trans_id: three_ds_data.ds_trans_id.map(Secret::new),
             three_ds_requestor_name: None,
             three_ds_auth_date: None,
             three_ds_auth_amt: None,
@@ -189,7 +194,7 @@ impl From<AuthenticationData> for Archipel3DS {
             three_ds_version: three_ds_data.message_version.to_string(),
             authentication_value: Secret::new(three_ds_data.cavv),
             authentication_method: None,
-            eci: three_ds_data.eci.map(| eci | Secret::new(eci))
+            eci: three_ds_data.eci.map(Secret::new),
         }
     }
 }
@@ -250,10 +255,10 @@ pub struct TokenizedCardData {
     wallet_information: ArchipelWalletInformation,
 }
 
-impl TryFrom<(domain::payments::WalletData, Option<PaymentMethodToken>)> for TokenizedCardData {
+impl TryFrom<(&domain::payments::WalletData, &Option<PaymentMethodToken>)> for TokenizedCardData {
     type Error = error_stack::Report<errors::ConnectorError>;
     fn try_from(
-        (wallet_data, pm_token): (domain::payments::WalletData, Option<PaymentMethodToken>),
+        (wallet_data, pm_token): (&domain::payments::WalletData, &Option<PaymentMethodToken>),
     ) -> Result<Self, Self::Error> {
         let domain::payments::WalletData::ApplePay(apple_pay_data) = wallet_data else {
             return Err(error_stack::Report::from(
@@ -328,10 +333,10 @@ pub struct ArchipelCard {
     scheme: ArchipelCardScheme,
 }
 
-impl TryFrom<(Option<Secret<String>>, domain::payments::Card)> for ArchipelCard {
+impl TryFrom<(Option<Secret<String>>, &domain::payments::Card)> for ArchipelCard {
     type Error = error_stack::Report<errors::ConnectorError>;
     fn try_from(
-        (card_holder_name, ccard): (Option<Secret<String>>, domain::payments::Card),
+        (card_holder_name, ccard): (Option<Secret<String>>, &domain::payments::Card),
     ) -> Result<Self, Self::Error> {
         Ok(Self {
             number: ccard.card_number.clone(),
@@ -734,7 +739,7 @@ impl TryFrom<ArchipelRouterData<&types::PaymentsAuthorizeRouterData>>
         } = item;
 
         let payment_information = ArchipelPaymentInformation::try_from((amount, router_data))?;
-        let payment_method_data = match item.router_data.request.payment_method_data.clone() {
+        let payment_method_data = match &item.router_data.request.payment_method_data {
             domain::PaymentMethodData::Card(ccard) => {
                 ArchipelCard::try_from((payment_information.card_holder_name, ccard))?
             }
@@ -752,7 +757,10 @@ impl TryFrom<ArchipelRouterData<&types::PaymentsAuthorizeRouterData>>
             | domain::PaymentMethodData::Voucher(_)
             | domain::PaymentMethodData::GiftCard(_)
             | domain::PaymentMethodData::CardToken(_)
-            | domain::PaymentMethodData::OpenBanking(_) => {
+            | domain::PaymentMethodData::OpenBanking(_)
+            | domain::PaymentMethodData::NetworkToken(_)
+            | domain::PaymentMethodData::MobilePayment(_)
+            | domain::PaymentMethodData::CardDetailsForNetworkTransactionId(_) => {
                 Err(errors::ConnectorError::NotImplemented(
                     utils::get_unimplemented_payment_method_error_message("Archipel"),
                 ))?
@@ -760,7 +768,9 @@ impl TryFrom<ArchipelRouterData<&types::PaymentsAuthorizeRouterData>>
         };
 
         let three_ds: Option<Archipel3DS> = if item.router_data.is_three_ds() {
-            Some(Archipel3DS::from(item.router_data.request.get_authentication_data()?))
+            Some(Archipel3DS::from(
+                item.router_data.request.get_authentication_data()?,
+            ))
         } else {
             None
         };
@@ -792,12 +802,12 @@ impl TryFrom<ArchipelRouterData<&types::PaymentsAuthorizeRouterData>>
         } = item;
 
         let payment_information = ArchipelPaymentInformation::try_from((amount, router_data))?;
-        let payment_method_data = match item.router_data.request.payment_method_data.clone() {
-            domain::PaymentMethodData::Wallet(wallet_data) => TokenizedCardData::try_from((
-                wallet_data,
-                item.router_data.payment_method_token.clone(),
-            ))?,
+        let payment_method_data = match &item.router_data.request.payment_method_data {
+            domain::PaymentMethodData::Wallet(wallet_data) => {
+                TokenizedCardData::try_from((wallet_data, &item.router_data.payment_method_token))?
+            }
             domain::PaymentMethodData::Card(_)
+            | domain::PaymentMethodData::CardDetailsForNetworkTransactionId(_)
             | domain::PaymentMethodData::CardRedirect(_)
             | domain::PaymentMethodData::PayLater(_)
             | domain::PaymentMethodData::BankRedirect(_)
@@ -811,7 +821,9 @@ impl TryFrom<ArchipelRouterData<&types::PaymentsAuthorizeRouterData>>
             | domain::PaymentMethodData::Voucher(_)
             | domain::PaymentMethodData::GiftCard(_)
             | domain::PaymentMethodData::CardToken(_)
-            | domain::PaymentMethodData::OpenBanking(_) => {
+            | domain::PaymentMethodData::OpenBanking(_)
+            | domain::PaymentMethodData::NetworkToken(_)
+            | domain::PaymentMethodData::MobilePayment(_) => {
                 Err(errors::ConnectorError::NotImplemented(
                     utils::get_unimplemented_payment_method_error_message("Archipel"),
                 ))?
@@ -893,8 +905,8 @@ impl<F>
                     item.response.order.id.clone(),
                 ),
                 charge_id: None,
-                redirection_data: None,
-                mandate_reference: None,
+                redirection_data: Box::new(None),
+                mandate_reference: Box::new(None),
                 connector_metadata: metadata,
                 // Save archipel initial transaction uuid for network transaction mit/cit
                 network_txn_id: match item.data.request.is_customer_initiated_mandate_payment() {
@@ -930,23 +942,10 @@ impl<F>
             types::PaymentsResponseData,
         >,
     ) -> Result<Self, Self::Error> {
-        let capture_method = item
-            .data
-            .request
-            .capture_method
-            .ok_or_else(|| errors::ConnectorError::CaptureMethodNotSupported)?;
-
-        let archipel_flow =
-            ArchipelPaymentCase::foreign_try_from((item.data.status, capture_method))?;
-
-        let status = enums::AttemptStatus::foreign_from((
-            item.response.transaction_result.clone(),
-            archipel_flow,
-        ));
-
-        let metadata: Option<serde_json::Value> = ArchipelTransactionMetadata::from(&item.response)
-            .encode_to_value()
-            .ok();
+        let connector_metadata: Option<serde_json::Value> =
+            ArchipelTransactionMetadata::from(&item.response)
+                .encode_to_value()
+                .ok();
 
         let payment_checks: Option<types::ConnectorResponseData> = Some(
             types::ConnectorResponseData::with_additional_payment_method_data(
@@ -956,22 +955,32 @@ impl<F>
             ),
         );
 
+        let capture_method = item
+            .data
+            .request
+            .capture_method
+            .ok_or_else(|| errors::ConnectorError::CaptureMethodNotSupported)?;
+
+        let archipel_flow =
+            ArchipelPaymentCase::foreign_try_from((item.data.status, capture_method))?;
+
+        let status =
+            enums::AttemptStatus::foreign_from((item.response.transaction_result, archipel_flow));
+
         Ok(Self {
             status,
             response: Ok(types::PaymentsResponseData::TransactionResponse {
-                resource_id: types::ResponseId::ConnectorTransactionId(
-                    item.response.order.id.to_owned(),
-                ),
+                resource_id: types::ResponseId::ConnectorTransactionId(item.response.order.id),
                 charge_id: None,
-                redirection_data: None,
-                mandate_reference: None,
-                connector_metadata: metadata,
+                redirection_data: Box::new(None),
+                mandate_reference: Box::new(None),
+                connector_metadata,
                 network_txn_id: None,
                 connector_response_reference_id: None,
                 incremental_authorization_allowed: None,
             }),
             connector_response: payment_checks,
-            amount_captured: item.response.order.captured_amount.to_owned(),
+            amount_captured: item.response.order.captured_amount,
             ..item.data
         })
     }
@@ -1043,8 +1052,8 @@ impl<F>
                     item.response.order.id.to_owned(),
                 ),
                 charge_id: None,
-                redirection_data: None,
-                mandate_reference: None,
+                redirection_data: Box::new(None),
+                mandate_reference: Box::new(None),
                 connector_metadata,
                 network_txn_id: None,
                 connector_response_reference_id: None,
@@ -1114,7 +1123,7 @@ impl TryFrom<ArchipelRouterData<&types::SetupMandateRouterData>>
         } = item;
 
         let payment_information = ArchipelPaymentInformation::try_from((amount, router_data))?;
-        let card_data = match item.router_data.request.payment_method_data.clone() {
+        let card_data = match &item.router_data.request.payment_method_data {
             domain::PaymentMethodData::Card(ccard) => {
                 ArchipelCard::try_from((payment_information.card_holder_name, ccard))?
             }
@@ -1176,8 +1185,8 @@ impl<F>
                     item.response.order.id.to_owned(),
                 ),
                 charge_id: None,
-                redirection_data: None,
-                mandate_reference: None,
+                redirection_data: Box::new(None),
+                mandate_reference: Box::new(None),
                 connector_metadata: metadata.encode_to_value().ok(),
                 network_txn_id: Some(item.response.transaction_id.clone()),
                 connector_response_reference_id: Some(item.response.transaction_id.clone()),
@@ -1247,8 +1256,8 @@ impl<F>
                     item.response.order.id.to_owned(),
                 ),
                 charge_id: None,
-                redirection_data: None,
-                mandate_reference: None,
+                redirection_data: Box::new(None),
+                mandate_reference: Box::new(None),
                 connector_metadata: metadata,
                 network_txn_id: None,
                 connector_response_reference_id: None,
