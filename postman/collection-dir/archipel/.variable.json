@@ -16,6 +16,11 @@
       "type": "string"
     },
     {
+      "key": "archipel_platform_url",
+      "value": "",
+      "type": "string"
+    },
+    {
       "key": "api_key",
       "value": "",
       "type": "string"

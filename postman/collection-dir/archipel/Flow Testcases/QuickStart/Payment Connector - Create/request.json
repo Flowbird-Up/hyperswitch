@@ -45,6 +45,7 @@
       },
       "metadata": {
         "tenant_id": "{{archipel_tenant_id}}",
+        "platform_url": "{{archipel_platform_url}}",
         "apple_pay_combined": {
           "manual": {
             "session_token_data": {
