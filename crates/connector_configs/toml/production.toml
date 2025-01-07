@@ -3341,8 +3341,6 @@ payment_method_type = "Discover"
 payment_method_type = "CartesBancaires"
 [[archipel.wallet]]
 payment_method_type = "apple_pay"
-[archipel.connector_auth.PeerAuth]
-ca_certificate = "Base64 encoded PEM formatted certificate chain"
 [archipel.metadata.tenant_id]
 name="tenant_id"
 label="Tenant ID"
@@ -3406,3 +3404,16 @@ placeholder="Enter Payment Processing Details At"
 required=true
 type="Radio"
 options=["Hyperswitch"]
+
+[archipel.metadata.acquirer_bin]
+name = "acquirer_bin"
+label = "Acquirer Bin"
+placeholder = "Enter Acquirer Bin"
+required = false
+type = "Text"
+[archipel.metadata.acquirer_merchant_id]
+name = "acquirer_merchant_id"
+label = "Acquirer Merchant ID"
+placeholder = "Enter Acquirer Merchant ID"
+required = false
+type = "Text"
