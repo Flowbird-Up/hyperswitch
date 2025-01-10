@@ -1,10 +1,10 @@
 {
   "childrenOrder": [
-    "Payments - Create",
-    "Payments - Confirm",
-    "Payments - Retrieve",
+    "Payments - Create mandate",
+    "Payments - Confirm mandate",
+    "Payments - Retrieve mandate",
     "List payment methods for a Customer",
-    "Recurring Payments - Create",
-    "Payments - Retrieve-copy"
+    "Payments - Create recurring",
+    "Payments - Retrieve recurring"
   ]
 }

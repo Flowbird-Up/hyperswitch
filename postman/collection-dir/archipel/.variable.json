@@ -11,6 +11,38 @@
       "type": "string"
     },
     {
+      "key": "organization_id",
+      "value": ""
+    },
+    {
+      "key": "merchant_id",
+      "value": ""
+    },
+    {
+      "key": "profile_id",
+      "value": ""
+    },
+    {
+      "key": "api_key",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "api_key_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "publishable_key",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "client_secret",
+      "value": "",
+      "type": "string"
+    },
+    {
       "key": "archipel_tenant_id",
       "value": "",
       "type": "string"
@@ -21,12 +53,7 @@
       "type": "string"
     },
     {
-      "key": "api_key",
-      "value": "",
-      "type": "string"
-    },
-    {
-      "key": "merchant_id",
+      "key": "merchant_connector_id",
       "value": ""
     },
     {
@@ -42,73 +69,11 @@
       "value": ""
     },
     {
-      "key": "payment_method_id",
-      "value": ""
-    },
-    {
       "key": "refund_id",
       "value": ""
     },
     {
-      "key": "merchant_connector_id",
-      "value": ""
-    },
-    {
-      "key": "client_secret",
-      "value": "",
-      "type": "string"
-    },
-    {
-      "key": "connector_api_key",
-      "value": "",
-      "type": "string"
-    },
-    {
-      "key": "connector_api_secret",
-      "value": "",
-      "type": "string"
-    },
-    {
-      "key": "connector_key1",
-      "value": "",
-      "type": "string"
-    },
-    {
-      "key": "connector_key2",
-      "value": "",
-      "type": "string"
-    },
-    {
-      "key": "publishable_key",
-      "value": "",
-      "type": "string"
-    },
-    {
-      "key": "api_key_id",
-      "value": "",
-      "type": "string"
-    },
-    {
       "key": "payment_token",
-      "value": ""
-    },
-    {
-      "key": "gateway_merchant_id",
-      "value": "",
-      "type": "string"
-    },
-    {
-      "key": "certificate",
-      "value": "",
-      "type": "string"
-    },
-    {
-      "key": "certificate_keys",
-      "value": "",
-      "type": "string"
-    },
-    {
-      "key": "profile_id",
       "value": ""
     },
     {
@@ -117,10 +82,6 @@
     },
     {
       "key": "archipel_transaction_uuid",
-      "value": ""
-    },
-    {
-      "key": "organization_id",
       "value": ""
     }
   ]
