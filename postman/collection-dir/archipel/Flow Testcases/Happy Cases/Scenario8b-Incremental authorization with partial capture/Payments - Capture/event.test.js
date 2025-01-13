@@ -22,7 +22,7 @@ pm.test("[POST]::/payments/:id/capture - Response has JSON Body", function () {
 let jsonData = {};
 try {
   jsonData = pm.response.json();
-} catch (e) {}
+} catch (e) { }
 
 // pm.collectionVariables - Set payment_id as variable for jsonData.payment_id
 if (jsonData?.payment_id) {
@@ -70,12 +70,12 @@ if (jsonData?.amount) {
   );
 }
 
-// Response body should have value "500" for "amount_received"
+// Response body should have value "600" for "amount_received"
 if (jsonData?.amount_received) {
   pm.test(
-    "[POST]::/payments:id/capture - Content check if value for 'amount_received' matches '500'",
+    "[POST]::/payments:id/capture - Content check if value for 'amount_received' matches '600'",
     function () {
-      pm.expect(jsonData.amount_received).to.eql(500);
+      pm.expect(jsonData.amount_received).to.eql(600);
     },
   );
 }
