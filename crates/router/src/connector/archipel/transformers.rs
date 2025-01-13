@@ -352,6 +352,33 @@ impl TryFrom<(Option<Secret<String>>, &domain::payments::Card)> for ArchipelCard
     }
 }
 
+impl
+    TryFrom<(
+        Option<Secret<String>>,
+        &hyperswitch_domain_models::payment_method_data::CardDetailsForNetworkTransactionId,
+    )> for ArchipelCard
+{
+    type Error = error_stack::Report<errors::ConnectorError>;
+    fn try_from(
+        (card_holder_name, card_details): (
+            Option<Secret<String>>,
+            &hyperswitch_domain_models::payment_method_data::CardDetailsForNetworkTransactionId,
+        ),
+    ) -> Result<Self, Self::Error> {
+        Ok(Self {
+            number: card_details.card_number.clone(),
+            expiry: CardExpiryDate {
+                month: card_details.card_exp_month.clone(),
+                year: card_details.get_card_expiry_year_2_digit()?,
+            },
+            security_code: None,
+            application_selection_indicator: ApplicationSelectionIndicator::ByDefault,
+            card_holder_name,
+            scheme: ArchipelCardScheme::foreign_from(card_details.get_card_issuer().ok()),
+        })
+    }
+}
+
 #[derive(Debug, Serialize, Eq, PartialEq, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct ArchipelWalletInformation {
@@ -743,6 +770,9 @@ impl TryFrom<ArchipelRouterData<&types::PaymentsAuthorizeRouterData>>
             domain::PaymentMethodData::Card(ccard) => {
                 ArchipelCard::try_from((payment_information.card_holder_name, ccard))?
             }
+            domain::PaymentMethodData::CardDetailsForNetworkTransactionId(card_details) => {
+                ArchipelCard::try_from((payment_information.card_holder_name, card_details))?
+            }
             domain::PaymentMethodData::CardRedirect(_)
             | domain::PaymentMethodData::Wallet(_)
             | domain::PaymentMethodData::PayLater(_)
@@ -759,8 +789,7 @@ impl TryFrom<ArchipelRouterData<&types::PaymentsAuthorizeRouterData>>
             | domain::PaymentMethodData::CardToken(_)
             | domain::PaymentMethodData::OpenBanking(_)
             | domain::PaymentMethodData::NetworkToken(_)
-            | domain::PaymentMethodData::MobilePayment(_)
-            | domain::PaymentMethodData::CardDetailsForNetworkTransactionId(_) => {
+            | domain::PaymentMethodData::MobilePayment(_) => {
                 Err(errors::ConnectorError::NotImplemented(
                     utils::get_unimplemented_payment_method_error_message("Archipel"),
                 ))?
