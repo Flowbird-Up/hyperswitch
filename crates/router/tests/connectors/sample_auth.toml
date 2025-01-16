@@ -14,7 +14,6 @@ api_secret = "Secondary key"
 api_key = "API Key"
 
 [archipel]
-api_key = "API Key"
 
 [authorizedotnet]
 api_key = "MyMerchantName"
