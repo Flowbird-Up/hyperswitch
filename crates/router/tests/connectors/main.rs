@@ -11,7 +11,6 @@ mod adyen;
 mod adyenplatform;
 mod airwallex;
 mod amazonpay;
-mod archipel;
 mod authorizedotnet;
 mod bambora;
 mod bamboraapac;
