@@ -1268,6 +1268,7 @@ impl ConnectorAuthTypeAndMetadataValidation<'_> {
             }
             api_enums::Connector::Archipel => {
                 archipel::transformers::ArchipelAuthType::try_from(self.auth_type)?;
+                archipel::transformers::ArchipelConfigData::try_from(self.connector_meta_data)?;
                 Ok(())
             }
             api_enums::Connector::Authorizedotnet => {

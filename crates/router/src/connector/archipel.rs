@@ -3,8 +3,8 @@ use std::fmt::Debug;
 use common_utils::ext_traits::ValueExt;
 use diesel_models::enums;
 use error_stack::{report, ResultExt};
-use http::StatusCode;
 use pm_auth::consts;
+use router_env::{error, info};
 use transformers::{
     self as archipel, ArchipelCardAuthorizationRequest, ArchipelIncrementalAuthorizationRequest,
     ArchipelPaymentsCancelRequest, ArchipelRefundRequest, ArchipelWalletAuthorizationRequest,
@@ -101,29 +101,37 @@ impl ConnectorCommon for Archipel {
         res: Response,
         event_builder: Option<&mut ConnectorEvent>,
     ) -> CustomResult<ErrorResponse, errors::ConnectorError> {
-        let response: archipel::ArchipelErrorResponse = archipel::ArchipelErrorResponse {
-            status_code: res.status_code,
-            // TODO: something more meaningful then empty string as error code
-            code: String::new(),
-            message: serde_json::from_slice(&res.response).unwrap_or_default(),
-            reason: Some(
-                StatusCode::from_u16(res.status_code)
-                    .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR)
-                    .to_string(),
-            ),
-        };
+        let archipel_error: CustomResult<archipel::ArchipelErrorMessage, errors::ParsingError> =
+            res.response.parse_struct("ArchipelErrorMessage");
 
-        event_builder.map(|event| event.set_response_body(&response));
-        router_env::logger::info!(connector_response=?response);
+        match archipel_error {
+            Ok(err) => {
+                event_builder.map(|i| i.set_error_response_body(&err));
+                info!(connector_response=?err);
 
-        Ok(ErrorResponse {
-            status_code: response.status_code,
-            code: response.code,
-            message: response.message,
-            reason: response.reason,
-            attempt_status: Some(enums::AttemptStatus::Failure),
-            connector_transaction_id: None,
-        })
+                Ok(ErrorResponse {
+                    status_code: res.status_code,
+                    code: err.code.clone(),
+                    attempt_status: None,
+                    connector_transaction_id: None,
+                    reason: err.description.clone(),
+                    message: err
+                        .description
+                        .unwrap_or(consts::NO_ERROR_MESSAGE.to_string())
+                        .clone(),
+                })
+            }
+            Err(error) => {
+                event_builder.map(|event| {
+                    event.set_error(serde_json::json!({
+                        "error": res.response.escape_ascii().to_string(),
+                        "status_code": res.status_code
+                    }))
+                });
+                error!(deserialization_error=?error);
+                crate::utils::handle_json_response_deserialization_failure(res, "archipel")
+            }
+        }
     }
 }
 
@@ -160,6 +168,7 @@ impl ConnectorValidation for Archipel {
             crate::connector::utils::PaymentMethodDataType::Card,
             // add other PaymentMethodDataType for mandate
         ]);
+
         crate::connector::utils::is_mandate_supported(
             pm_data,
             pm_type,
@@ -253,8 +262,10 @@ impl ConnectorIntegration<api::Authorize, types::PaymentsAuthorizeData, types::P
             .response
             .parse_struct("ArchipelPaymentsResponse for Authorize flow")
             .change_context(errors::ConnectorError::ResponseDeserializationFailed)?;
+
         event_builder.map(|event| event.set_response_body(&response));
-        router_env::logger::info!(connector_response=?response);
+        info!(connector_response=?response);
+
         types::RouterData::try_from(types::ResponseRouterData {
             response,
             data: data.clone(),
@@ -275,28 +286,7 @@ impl ConnectorIntegration<api::Authorize, types::PaymentsAuthorizeData, types::P
         res: Response,
         event_builder: Option<&mut ConnectorEvent>,
     ) -> CustomResult<ErrorResponse, errors::ConnectorError> {
-        let response: archipel::ArchipelErrorMessage = res
-            .response
-            .parse_struct("ArchipelErrorMessage for Authorize flow")
-            .change_context(errors::ConnectorError::ResponseDeserializationFailed)?;
-
-        event_builder.map(|event| {
-            event.set_response_body(
-                &serde_json::from_slice(&res.response)
-                    .unwrap_or("")
-                    .to_string(),
-            )
-        });
-        router_env::logger::error!(connector_response=?response);
-
-        Ok(ErrorResponse {
-            status_code: res.status_code,
-            code: response.code,
-            message: String::new(),
-            reason: response.description,
-            attempt_status: Some(enums::AttemptStatus::Failure),
-            connector_transaction_id: None,
-        })
+        self.build_error_response(res, event_builder)
     }
 }
 
@@ -382,15 +372,26 @@ impl
             .response
             .parse_struct("ArchipelPaymentsResponse for IncrementalAuthorization flow")
             .change_context(errors::ConnectorError::ResponseDeserializationFailed)?;
+
         event_builder.map(|event| event.set_response_body(&response));
-        router_env::logger::info!(connector_response=?response);
+        info!(connector_response=?response);
+
         types::RouterData::try_from(types::ResponseRouterData {
             response,
             data: data.clone(),
             http_code: res.status_code,
         })
     }
+
     fn get_error_response(
+        &self,
+        res: Response,
+        event_builder: Option<&mut ConnectorEvent>,
+    ) -> CustomResult<ErrorResponse, errors::ConnectorError> {
+        self.build_error_response(res, event_builder)
+    }
+
+    fn get_5xx_error_response(
         &self,
         res: Response,
         event_builder: Option<&mut ConnectorEvent>,
@@ -462,8 +463,10 @@ impl ConnectorIntegration<api::PSync, types::PaymentsSyncData, types::PaymentsRe
             .response
             .parse_struct("ArchipelPaymentsResponse for PSync flow")
             .change_context(errors::ConnectorError::ResponseDeserializationFailed)?;
+
         event_builder.map(|event| event.set_response_body(&response));
-        router_env::logger::info!(connector_response=?response);
+        info!(connector_response=?response);
+
         types::RouterData::try_from(types::ResponseRouterData {
             response,
             data: data.clone(),
@@ -472,6 +475,14 @@ impl ConnectorIntegration<api::PSync, types::PaymentsSyncData, types::PaymentsRe
     }
 
     fn get_error_response(
+        &self,
+        res: Response,
+        event_builder: Option<&mut ConnectorEvent>,
+    ) -> CustomResult<ErrorResponse, errors::ConnectorError> {
+        self.build_error_response(res, event_builder)
+    }
+
+    fn get_5xx_error_response(
         &self,
         res: Response,
         event_builder: Option<&mut ConnectorEvent>,
@@ -556,8 +567,10 @@ impl ConnectorIntegration<api::Capture, types::PaymentsCaptureData, types::Payme
             .response
             .parse_struct("ArchipelPaymentsResponse for Capture flow")
             .change_context(errors::ConnectorError::ResponseDeserializationFailed)?;
+
         event_builder.map(|event| event.set_response_body(&response));
-        router_env::logger::info!(connector_response=?response);
+        info!(connector_response=?response);
+
         types::RouterData::try_from(types::ResponseRouterData {
             response,
             data: data.clone(),
@@ -566,6 +579,14 @@ impl ConnectorIntegration<api::Capture, types::PaymentsCaptureData, types::Payme
     }
 
     fn get_error_response(
+        &self,
+        res: Response,
+        event_builder: Option<&mut ConnectorEvent>,
+    ) -> CustomResult<ErrorResponse, errors::ConnectorError> {
+        self.build_error_response(res, event_builder)
+    }
+
+    fn get_5xx_error_response(
         &self,
         res: Response,
         event_builder: Option<&mut ConnectorEvent>,
@@ -647,8 +668,10 @@ impl
             .response
             .parse_struct("ArchipelPaymentsResponse for SetupMandate flow")
             .change_context(errors::ConnectorError::ResponseDeserializationFailed)?;
+
         event_builder.map(|event| event.set_response_body(&response));
-        router_env::logger::info!(connector_response=?response);
+        info!(connector_response=?response);
+
         types::RouterData::try_from(types::ResponseRouterData {
             response,
             data: data.clone(),
@@ -657,6 +680,14 @@ impl
     }
 
     fn get_error_response(
+        &self,
+        res: Response,
+        event_builder: Option<&mut ConnectorEvent>,
+    ) -> CustomResult<ErrorResponse, errors::ConnectorError> {
+        self.build_error_response(res, event_builder)
+    }
+
+    fn get_5xx_error_response(
         &self,
         res: Response,
         event_builder: Option<&mut ConnectorEvent>,
@@ -737,8 +768,10 @@ impl ConnectorIntegration<api::Execute, types::RefundsData, types::RefundsRespon
             .response
             .parse_struct("ArchipelRefundResponse for Execute flow")
             .change_context(errors::ConnectorError::ResponseDeserializationFailed)?;
+
         event_builder.map(|event| event.set_response_body(&response));
-        router_env::logger::info!(connector_response=?response);
+        info!(connector_response=?response);
+
         types::RouterData::try_from(types::ResponseRouterData {
             response,
             data: data.clone(),
@@ -751,37 +784,15 @@ impl ConnectorIntegration<api::Execute, types::RefundsData, types::RefundsRespon
         res: Response,
         event_builder: Option<&mut ConnectorEvent>,
     ) -> CustomResult<ErrorResponse, errors::ConnectorError> {
-        let archipel_error: CustomResult<archipel::ArchipelErrorMessage, errors::ParsingError> =
-            res.response.parse_struct("ArchipelErrorMessage");
+        self.build_error_response(res, event_builder)
+    }
 
-        match archipel_error {
-            Ok(err) => {
-                event_builder.map(|i| i.set_error_response_body(&err));
-                router_env::logger::info!(connector_response=?err);
-
-                Ok(ErrorResponse {
-                    status_code: res.status_code,
-                    code: err.code.clone(),
-                    attempt_status: None,
-                    connector_transaction_id: None,
-                    reason: err.description.clone(),
-                    message: err
-                        .description
-                        .unwrap_or(consts::NO_ERROR_MESSAGE.to_string())
-                        .clone(),
-                })
-            }
-            Err(error) => {
-                event_builder.map(|event| {
-                    event.set_error(serde_json::json!({
-                        "error": res.response.escape_ascii().to_string(),
-                        "status_code": res.status_code
-                    }))
-                });
-                router_env::logger::error!(deserialization_error=?error);
-                crate::utils::handle_json_response_deserialization_failure(res, "archipel")
-            }
-        }
+    fn get_5xx_error_response(
+        &self,
+        res: Response,
+        event_builder: Option<&mut ConnectorEvent>,
+    ) -> CustomResult<ErrorResponse, errors::ConnectorError> {
+        self.build_error_response(res, event_builder)
     }
 }
 
@@ -848,8 +859,10 @@ impl ConnectorIntegration<api::RSync, types::RefundsData, types::RefundsResponse
             .response
             .parse_struct("ArchipelRefundResponse for RSync flow")
             .change_context(errors::ConnectorError::ResponseDeserializationFailed)?;
+
         event_builder.map(|event| event.set_response_body(&response));
-        router_env::logger::info!(connector_response=?response);
+        info!(connector_response=?response);
+
         types::RouterData::try_from(types::ResponseRouterData {
             response,
             data: data.clone(),
@@ -858,6 +871,14 @@ impl ConnectorIntegration<api::RSync, types::RefundsData, types::RefundsResponse
     }
 
     fn get_error_response(
+        &self,
+        res: Response,
+        event_builder: Option<&mut ConnectorEvent>,
+    ) -> CustomResult<ErrorResponse, errors::ConnectorError> {
+        self.build_error_response(res, event_builder)
+    }
+
+    fn get_5xx_error_response(
         &self,
         res: Response,
         event_builder: Option<&mut ConnectorEvent>,
@@ -968,8 +989,10 @@ impl ConnectorIntegration<api::Void, types::PaymentsCancelData, types::PaymentsR
             .response
             .parse_struct("ArchipelPaymentsResponse for Void flow")
             .change_context(errors::ConnectorError::ResponseDeserializationFailed)?;
+
         event_builder.map(|event| event.set_response_body(&response));
-        router_env::logger::info!(connector_response=?response);
+        info!(connector_response=?response);
+
         types::RouterData::try_from(types::ResponseRouterData {
             response,
             data: data.clone(),
@@ -978,6 +1001,14 @@ impl ConnectorIntegration<api::Void, types::PaymentsCancelData, types::PaymentsR
     }
 
     fn get_error_response(
+        &self,
+        res: Response,
+        event_builder: Option<&mut ConnectorEvent>,
+    ) -> CustomResult<ErrorResponse, errors::ConnectorError> {
+        self.build_error_response(res, event_builder)
+    }
+
+    fn get_5xx_error_response(
         &self,
         res: Response,
         event_builder: Option<&mut ConnectorEvent>,

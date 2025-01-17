@@ -7,6 +7,7 @@ use hyperswitch_domain_models::{
 };
 use hyperswitch_interfaces::consts;
 use masking::Secret;
+use router_env::error;
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -597,7 +598,7 @@ impl TryFrom<&ArchipelTransactionReference> for types::AdditionalPaymentMethodCo
     fn try_from(transaction_reference: &ArchipelTransactionReference) -> Result<Self, Self::Error> {
         let payment_checks = Some(serde_json::to_value(transaction_reference).map_err(
             |error| {
-                router_env::logger::error!(deserialization_error=?error);
+                error!(deserialization_error=?error);
                 errors::ConnectorError::ResponseDeserializationFailed
             },
         )?);
@@ -692,20 +693,16 @@ impl TryFrom<(ArchipelAmount, &types::PaymentsAuthorizeRouterData)> for Archipel
             initiator: transaction_initiator.clone(),
         };
 
-        let billing_addr = router_data.get_billing()?.clone();
-        let card_holder_name = billing_addr.get_optional_full_name();
+        let address = router_data.get_billing()?.clone();
+        let card_holder_name = address.get_optional_full_name();
 
-        let address =
-            billing_addr
-                .address
-                .ok_or_else(|| errors::ConnectorError::MissingRequiredField {
-                    field_name: "billing.address",
-                })?;
-
-        let billing_address: ArchipelBillingAddress = address.try_into().map_err(|error| {
-            router_env::logger::error!(convertion_error=?error);
-            errors::ConnectorError::ResponseDeserializationFailed
-        })?;
+        let billing_address = address
+            .address
+            .map(ArchipelBillingAddress::try_from)
+            .transpose()?
+            .ok_or_else(|| errors::ConnectorError::MissingRequiredField {
+                field_name: "billing.address",
+            })?;
 
         let cardholder = Some(ArchipelCardHolder {
             billing_address: Some(billing_address),
@@ -938,10 +935,11 @@ impl<F>
                 mandate_reference: Box::new(None),
                 connector_metadata: metadata,
                 // Save archipel initial transaction uuid for network transaction mit/cit
-                network_txn_id: match item.data.request.is_customer_initiated_mandate_payment() {
-                    true => Some(item.response.transaction_id),
-                    false => None,
-                },
+                network_txn_id: item
+                    .data
+                    .request
+                    .is_customer_initiated_mandate_payment()
+                    .then_some(item.response.transaction_id),
                 connector_response_reference_id: None,
                 incremental_authorization_allowed: Some(is_incremental_allowed),
             }),
