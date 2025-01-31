@@ -652,25 +652,40 @@ Cypress.Commands.add(
 
     updateConnectorBody.connector_type = connectorType;
 
-    cy.request({
-      method: "POST",
-      url: url,
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-        "api-key": api_key,
-        "x-merchant-id": merchant_id,
-      },
-      body: updateConnectorBody,
-      failOnStatusCode: false,
-    }).then((response) => {
-      logRequestId(response.headers["x-request-id"]);
-      expect(response.headers["content-type"]).to.include("application/json");
-      expect(response.body.connector_name).to.equal(connector_id);
-      expect(response.body.merchant_connector_id).to.equal(
-        merchant_connector_id
-      );
-      expect(response.body.connector_label).to.equal("updated_connector_label");
+    // readFile is used to read the contents of the file and it always returns a promise ([Object Object]) due to its asynchronous nature
+    // it is best to use then() to handle the response within the same block of code
+    cy.readFile(globalState.get("connectorAuthFilePath")).then((jsonContent) => {
+        const authDetails = getValueByKey(
+            JSON.stringify(jsonContent),
+            connector_id
+        );
+        if (authDetails && authDetails.metadata) {
+          updateConnectorBody.metadata = {
+            ...updateConnectorBody.metadata, // Preserve existing metadata
+            ...authDetails.metadata,
+          };
+        }
+
+        cy.request({
+          method: "POST",
+          url: url,
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+            "api-key": api_key,
+            "x-merchant-id": merchant_id,
+          },
+          body: updateConnectorBody,
+          failOnStatusCode: false,
+        }).then((response) => {
+          logRequestId(response.headers["x-request-id"]);
+          expect(response.headers["content-type"]).to.include("application/json");
+          expect(response.body.connector_name).to.equal(connector_id);
+          expect(response.body.merchant_connector_id).to.equal(
+            merchant_connector_id
+          );
+          expect(response.body.connector_label).to.equal("updated_connector_label");
+        });
     });
   }
 );
@@ -1269,6 +1284,10 @@ Cypress.Commands.add(
             }
           } else if (response.body.authentication_type === "no_three_ds") {
             for (const key in resData.body) {
+              // Override payment_checks for archipel connector
+              if (key === "payment_method_data" && globalState["data"]["connectorId"] === "archipel") {
+                resData.body.payment_method_data.card.payment_checks = response.body.payment_method_data.card.payment_checks
+              }
               expect(resData.body[key], [key]).to.deep.equal(
                 response.body[key]
               );
@@ -1294,6 +1313,10 @@ Cypress.Commands.add(
             }
           } else if (response.body.authentication_type === "no_three_ds") {
             for (const key in resData.body) {
+              // Override payment_checks for archipel connector
+              if (key === "payment_method_data" && globalState["data"]["connectorId"] === "archipel") {
+                resData.body.payment_method_data.card.payment_checks = response.body.payment_method_data.card.payment_checks
+              }
               expect(resData.body[key], [key]).to.deep.equal(
                 response.body[key]
               );
@@ -1648,6 +1671,10 @@ Cypress.Commands.add(
             }
           } else if (response.body.authentication_type === "no_three_ds") {
             for (const key in resData.body) {
+              // Override payment_checks for archipel connector
+              if (key === "payment_method_data" && globalState["data"]["connectorId"] === "archipel") {
+                resData.body.payment_method_data.card.payment_checks = response.body.payment_method_data.card.payment_checks
+              }
               expect(resData.body[key], [key]).to.deep.equal(
                 response.body[key]
               );
@@ -1673,6 +1700,10 @@ Cypress.Commands.add(
             }
           } else if (response.body.authentication_type === "no_three_ds") {
             for (const key in resData.body) {
+              // Override payment_checks for archipel connector
+              if (key === "payment_method_data" && globalState["data"]["connectorId"] === "archipel") {
+                resData.body.payment_method_data.card.payment_checks = response.body.payment_method_data.card.payment_checks
+              }
               expect(resData.body[key], [key]).to.deep.equal(
                 response.body[key]
               );

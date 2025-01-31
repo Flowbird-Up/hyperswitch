@@ -794,12 +794,14 @@ impl TryFrom<ArchipelRouterData<&types::PaymentsAuthorizeRouterData>>
         };
 
         let three_ds: Option<Archipel3DS> = if item.router_data.is_three_ds() {
-            Some(Archipel3DS::from(
-                item.router_data.request.get_authentication_data()?,
-            ))
-        } else {
-            None
-        };
+            let auth_data = item.router_data.request.get_authentication_data()
+                .change_context(errors::ConnectorError::NotSupported {
+                    message: "Selected 3DS authentication method".to_string(),
+                    connector: "archipel"
+                })?;
+            Some(Archipel3DS::from(auth_data))
+        }
+        else { None };
 
         Ok(Self {
             order: payment_information.order,
@@ -1007,7 +1009,6 @@ impl<F>
                 incremental_authorization_allowed: None,
             }),
             connector_response: payment_checks,
-            amount_captured: item.response.order.captured_amount,
             ..item.data
         })
     }
