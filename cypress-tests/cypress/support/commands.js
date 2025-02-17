@@ -1309,23 +1309,9 @@ Cypress.Commands.add(
             }
           } else if (response.body.authentication_type === "no_three_ds") {
             for (const key in resData.body) {
-              // Override payment_checks for archipel connector
-              if (key === "payment_method_data" && globalState["data"]["connectorId"] === "archipel") {
-                expect(response.body[key]["card"]["payment_checks"]["responseCode"],
-                    "payment_checks.responseCode").to.equal("00");
-                expect(response.body[key]["card"]["payment_checks"]["authorizationCode"],
-                    "payment_checks.authorizationCode").to.be.a('string');
-                expect(response.body[key]["card"]["payment_checks"]["issuerTransactionId"],
-                    "payment_checks.issuerTransactionId").to.be.a('string');
-                expect(response.body[key]["card"]["payment_checks"]["financialNetworkCode"],
-                    "payment_checks.financialNetworkCode").to.be.null;
-                expect(response.body[key]["card"]["payment_checks"]["paymentAccountReference"],
-                    "payment_checks.paymentAccountReference").to.be.a('string');
-              } else {
-                expect(resData.body[key], [key]).to.deep.equal(
-                    response.body[key]
-                );
-              }
+              expect(resData.body[key], [key]).to.deep.equal(
+                  response.body[key]
+              );
             }
           } else {
             throw new Error(
@@ -1702,23 +1688,9 @@ Cypress.Commands.add(
             }
           } else if (response.body.authentication_type === "no_three_ds") {
             for (const key in resData.body) {
-              // Override payment_checks for archipel connector
-              if (key === "payment_method_data" && globalState["data"]["connectorId"] === "archipel") {
-                expect(response.body[key]["card"]["payment_checks"]["responseCode"],
-                    "payment_checks.responseCode").to.equal("00");
-                expect(response.body[key]["card"]["payment_checks"]["authorizationCode"],
-                    "payment_checks.authorizationCode").to.be.a('string');
-                expect(response.body[key]["card"]["payment_checks"]["issuerTransactionId"],
-                    "payment_checks.issuerTransactionId").to.be.a('string');
-                expect(response.body[key]["card"]["payment_checks"]["financialNetworkCode"],
-                    "payment_checks.financialNetworkCode").to.be.null;
-                expect(response.body[key]["card"]["payment_checks"]["paymentAccountReference"],
-                    "payment_checks.paymentAccountReference").to.be.a('string');
-              } else {
-                expect(resData.body[key], [key]).to.deep.equal(
-                    response.body[key]
-                );
-              }
+              expect(resData.body[key], [key]).to.deep.equal(
+                  response.body[key]
+              );
             }
           } else {
             throw new Error(

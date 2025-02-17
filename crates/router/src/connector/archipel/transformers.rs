@@ -7,7 +7,6 @@ use hyperswitch_domain_models::{
 };
 use hyperswitch_interfaces::consts;
 use masking::Secret;
-use router_env::error;
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -580,34 +579,11 @@ impl Default for ArchipelErrorMessage {
 pub struct ArchipelTransactionMetadata {
     pub transaction_id: String,
     pub transaction_date: String,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct ArchipelTransactionReference {
     pub financial_network_code: Option<String>,
     pub issuer_transaction_id: Option<String>,
     pub response_code: Option<String>,
     pub authorization_code: Option<String>,
     pub payment_account_reference: Option<String>,
-}
-
-impl TryFrom<&ArchipelTransactionReference> for types::AdditionalPaymentMethodConnectorResponse {
-    type Error = errors::ConnectorError;
-
-    fn try_from(transaction_reference: &ArchipelTransactionReference) -> Result<Self, Self::Error> {
-        let payment_checks = Some(serde_json::to_value(transaction_reference).map_err(
-            |error| {
-                error!(deserialization_error=?error);
-                errors::ConnectorError::ResponseDeserializationFailed
-            },
-        )?);
-
-        Ok(Self::Card {
-            authentication_data: None,
-            payment_checks,
-        })
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -630,13 +606,6 @@ impl From<&ArchipelPaymentsResponse> for ArchipelTransactionMetadata {
         Self {
             transaction_id: payment_response.transaction_id.clone(),
             transaction_date: payment_response.transaction_date.clone(),
-        }
-    }
-}
-
-impl From<&ArchipelPaymentsResponse> for ArchipelTransactionReference {
-    fn from(payment_response: &ArchipelPaymentsResponse) -> Self {
-        Self {
             financial_network_code: payment_response.financial_network_code.clone(),
             issuer_transaction_id: payment_response.issuer_transaction_id.clone(),
             response_code: payment_response.response_code.clone(),
@@ -912,14 +881,6 @@ impl<F>
             .encode_to_value()
             .ok();
 
-        let transaction_reference: Option<types::ConnectorResponseData> = Some(
-            types::ConnectorResponseData::with_additional_payment_method_data(
-                types::AdditionalPaymentMethodConnectorResponse::try_from(
-                    &ArchipelTransactionReference::from(&item.response),
-                )?,
-            ),
-        );
-
         let is_incremental_allowed = if capture_method == enums::CaptureMethod::Automatic {
             false
         } else {
@@ -945,7 +906,6 @@ impl<F>
                 connector_response_reference_id: None,
                 incremental_authorization_allowed: Some(is_incremental_allowed),
             }),
-            connector_response: transaction_reference,
             ..item.data
         })
     }
@@ -976,14 +936,6 @@ impl<F>
                 .encode_to_value()
                 .ok();
 
-        let payment_checks: Option<types::ConnectorResponseData> = Some(
-            types::ConnectorResponseData::with_additional_payment_method_data(
-                types::AdditionalPaymentMethodConnectorResponse::try_from(
-                    &ArchipelTransactionReference::from(&item.response),
-                )?,
-            ),
-        );
-
         let capture_method = item
             .data
             .request
@@ -1008,7 +960,6 @@ impl<F>
                 connector_response_reference_id: None,
                 incremental_authorization_allowed: None,
             }),
-            connector_response: payment_checks,
             ..item.data
         })
     }
@@ -1065,14 +1016,6 @@ impl<F>
                 .encode_to_value()
                 .ok();
 
-        let payment_checks: Option<types::ConnectorResponseData> = Some(
-            types::ConnectorResponseData::with_additional_payment_method_data(
-                types::AdditionalPaymentMethodConnectorResponse::try_from(
-                    &ArchipelTransactionReference::from(&item.response),
-                )?,
-            ),
-        );
-
         Ok(Self {
             status,
             response: Ok(types::PaymentsResponseData::TransactionResponse {
@@ -1087,7 +1030,6 @@ impl<F>
                 connector_response_reference_id: None,
                 incremental_authorization_allowed: None,
             }),
-            connector_response: payment_checks,
             ..item.data
         })
     }
@@ -1198,14 +1140,6 @@ impl<F>
 
         let metadata = ArchipelTransactionMetadata::from(&item.response);
 
-        let payment_checks: Option<types::ConnectorResponseData> = Some(
-            types::ConnectorResponseData::with_additional_payment_method_data(
-                types::AdditionalPaymentMethodConnectorResponse::try_from(
-                    &ArchipelTransactionReference::from(&item.response),
-                )?,
-            ),
-        );
-
         Ok(Self {
             status,
             response: Ok(types::PaymentsResponseData::TransactionResponse {
@@ -1220,7 +1154,6 @@ impl<F>
                 connector_response_reference_id: Some(item.response.transaction_id.clone()),
                 incremental_authorization_allowed: Some(false),
             }),
-            connector_response: payment_checks,
             ..item.data
         })
     }
@@ -1269,14 +1202,6 @@ impl<F>
             .encode_to_value()
             .ok();
 
-        let payment_checks: Option<types::ConnectorResponseData> = Some(
-            types::ConnectorResponseData::with_additional_payment_method_data(
-                types::AdditionalPaymentMethodConnectorResponse::try_from(
-                    &ArchipelTransactionReference::from(&item.response),
-                )?,
-            ),
-        );
-
         Ok(Self {
             status,
             response: Ok(types::PaymentsResponseData::TransactionResponse {
@@ -1291,7 +1216,6 @@ impl<F>
                 connector_response_reference_id: None,
                 incremental_authorization_allowed: None,
             }),
-            connector_response: payment_checks,
             ..item.data
         })
     }
@@ -1356,14 +1280,6 @@ impl<F>
     ) -> Result<Self, Self::Error> {
         let status = enums::AuthorizationStatus::from(item.response.transaction_result.clone());
 
-        let connector_response: Option<types::ConnectorResponseData> = Some(
-            types::ConnectorResponseData::with_additional_payment_method_data(
-                types::AdditionalPaymentMethodConnectorResponse::try_from(
-                    &ArchipelTransactionReference::from(&item.response),
-                )?,
-            ),
-        );
-
         let errors: (Option<String>, Option<String>) = if status.clone()
             == enums::AuthorizationStatus::Success
             || item.response.error.clone().is_none()
@@ -1383,7 +1299,6 @@ impl<F>
                     connector_authorization_id: None,
                 },
             ),
-            connector_response,
             ..item.data
         })
     }
@@ -1435,7 +1350,6 @@ impl From<ArchipelPaymentStatus> for enums::RefundStatus {
     }
 }
 
-//TODO: Fill the struct with respective fields
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct ArchipelRefundOrderResponse {
     id: String,
