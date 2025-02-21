@@ -19,6 +19,7 @@ function normalize(input) {
     wellsfargo: "Wellsfargo",
     fiuu: "Fiuu",
     noon: "Noon",
+    archipel: "Archipel",
     // Add more known exceptions here
   };
 

@@ -3,10 +3,12 @@ import State from "../../utils/State";
 import { payment_methods_enabled } from "../PaymentUtils/Commons";
 
 let globalState;
+let connector;
 describe("Connector Account Create flow test", () => {
   before("seed global state", () => {
     cy.task("getGlobalState").then((state) => {
       globalState = new State(state);
+      connector = globalState.get("connectorId");
     });
   });
 
@@ -21,6 +23,24 @@ describe("Connector Account Create flow test", () => {
       payment_methods_enabled,
       globalState
     );
+  });
+
+  it("Enable Connector Agnostic for Business Profile", () => {
+    if (connector === "archipel") {
+      cy.UpdateBusinessProfileTest(
+          fixtures.businessProfile.bpUpdate,
+          true, // is_connector_agnostic_enabled
+          false, // collect_billing_address_from_wallet_connector
+          false, // collect_shipping_address_from_wallet_connector
+          false, // always_collect_billing_address_from_wallet_connector
+          false, // always_collect_shipping_address_from_wallet_connector
+          globalState
+      );
+    } else {
+      cy.log(
+          `Connector Agnostic not enabled for ${connector}. Skipping Business Profile update`
+      );
+    }
   });
 
   it("check and create multiple connectors", () => {
