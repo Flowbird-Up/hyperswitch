@@ -33,9 +33,9 @@ pm.test(
 );
 
 pm.test(
-  "[POST]::/payments - Payment Attempt has 'partial_charged' status",
+  "[POST]::/payments - Payment Attempt has 'authorized' status",
   function () {
-    pm.expect(payment_attempt.status).to.be.equal("partial_charged");
+    pm.expect(payment_attempt.status).to.be.equal("authorized");
   },
 );
 
@@ -54,5 +54,26 @@ pm.test(
   "[POST]::/payments - Payment Attempt has no error",
   function () {
     pm.expect(payment_attempt.error_message).to.be.null;
+  },
+);
+
+pm.test(
+  "[POST]::/payments - Payment Attempt has connector_metadata",
+  function () {
+    pm.expect(payment_attempt.connector_metadata).to.not.be.null;
+  },
+);
+
+pm.test(
+  "[POST]::/payments - Payment Attempt has additional connector_metadata fiels",
+  function () {
+    pm.expect(payment_attempt.connector_metadata.responseCode).to.be.string;
+    pm.expect(payment_attempt.connector_metadata.transactionId).to.be.string;
+    pm.expect(payment_attempt.connector_metadata.transactionDate).to.be.string;
+    pm.expect(payment_attempt.connector_metadata.authorizationCode).to.be.string;
+    pm.expect(payment_attempt.connector_metadata.issuerTransactionId).to.be.string;
+    pm.expect(payment_attempt.connector_metadata.financialNetworkCode).to.be.string;
+    pm.expect(payment_attempt.connector_metadata.paymentAccountReference).to.be.string;
+    pm.collectionVariables.set("archipel_transaction_meta", payment_attempt.connector_metadata);
   },
 );

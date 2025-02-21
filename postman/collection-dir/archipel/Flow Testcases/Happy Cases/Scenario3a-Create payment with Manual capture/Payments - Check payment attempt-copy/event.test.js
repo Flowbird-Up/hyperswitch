@@ -33,9 +33,9 @@ pm.test(
 );
 
 pm.test(
-  "[POST]::/payments - Payment Attempt has 'authorized' status",
+  "[POST]::/payments - Payment Attempt has 'charged' status",
   function () {
-    pm.expect(payment_attempt.status).to.be.equal("authorized");
+    pm.expect(payment_attempt.status).to.be.equal("charged");
   },
 );
 
@@ -57,6 +57,7 @@ pm.test(
   },
 );
 
+
 pm.test(
   "[POST]::/payments - Payment Attempt has connector_metadata",
   function () {
@@ -65,15 +66,25 @@ pm.test(
 );
 
 pm.test(
-  "[POST]::/payments - Payment Attempt has additional connector_metadata fiels",
+  "[POST]::/payments - Payment Attempt 'transactionId' connector_metadata fiels",
   function () {
-    pm.expect(payment_attempt.connector_metadata.responseCode).to.be.string;
-    pm.expect(payment_attempt.connector_metadata.transactionId).to.be.string;
-    pm.expect(payment_attempt.connector_metadata.transactionDate).to.be.string;
-    pm.expect(payment_attempt.connector_metadata.authorizationCode).to.be.string;
-    pm.expect(payment_attempt.connector_metadata.issuerTransactionId).to.be.string;
-    pm.expect(payment_attempt.connector_metadata.financialNetworkCode).to.be.string;
-    pm.expect(payment_attempt.connector_metadata.paymentAccountReference).to.be.string;
-    pm.collectionVariables.set("archipel_transaction_meta", payment_attempt.connector_metadata);
+    meta = pm.collectionVariables.get("archipel_transaction_meta")
+    // transactionId must have changed, not null and not empty
+    pm.expect(payment_attempt.connector_metadata.transactionId).to.not.null
+    pm.expect(payment_attempt.connector_metadata.transactionId).to.not.equal("");
+    pm.expect(payment_attempt.connector_metadata.transactionId).to.not.equal(meta.transactionId);
+  },
+);
+
+pm.test(
+  "[POST]::/payments - Payment Attempt match additional connector_metadata fiels",
+  function () {
+    meta = pm.collectionVariables.get("archipel_transaction_meta")
+    pm.expect(payment_attempt.connector_metadata.responseCode).to.equal(meta.responseCode);
+    pm.expect(payment_attempt.connector_metadata.authorizationCode).to.equal(meta.authorizationCode);
+    pm.expect(payment_attempt.connector_metadata.transactionDate).to.equal(meta.transactionDate);
+    pm.expect(payment_attempt.connector_metadata.issuerTransactionId).to.equal(meta.issuerTransactionId);
+    pm.expect(payment_attempt.connector_metadata.financialNetworkCode).to.equal(meta.financialNetworkCode);
+    pm.expect(payment_attempt.connector_metadata.paymentAccountReference).to.equal(meta.paymentAccountReference);
   },
 );

@@ -615,6 +615,47 @@ impl From<&ArchipelPaymentsResponse> for ArchipelTransactionMetadata {
     }
 }
 
+impl ArchipelTransactionMetadata {
+    fn amend_metadata(
+        (connector_meta, payment_response): (&Option<serde_json::Value>, &ArchipelPaymentsResponse)
+    ) -> Self {
+        if connector_meta.is_none() {
+            ArchipelTransactionMetadata::from(payment_response)
+        }
+        else {
+            let meta = connector_meta.clone().unwrap();
+            println!("my_meta {:?}", meta);
+            let transaction_id = payment_response.transaction_id.clone();
+            let transaction_date = payment_response.transaction_date.clone();
+            let financial_network_code = payment_response.financial_network_code.clone().or_else(|| {
+                meta["financialNetworkCode"].as_str().map(|x| x.to_string())
+            });
+            let issuer_transaction_id = payment_response.issuer_transaction_id.clone().or_else(|| {
+                meta["issuerTransactionId"].as_str().map(|x| x.to_string())
+            });
+            let response_code = payment_response.response_code.clone().or_else(|| {
+                meta["responseCode"].as_str().map(|x| x.to_string())
+            });
+            let authorization_code = payment_response.authorization_code.clone().or_else(|| {
+                meta["authorizationCode"].as_str().map(|x| x.to_string())
+            });
+            let payment_account_reference = payment_response.payment_account_reference.clone().or_else(|| {
+                meta["paymentAccountReference"].as_str().map(|x| x.to_string())
+            });
+
+            Self {
+                transaction_id,
+                transaction_date,
+                financial_network_code,
+                issuer_transaction_id,
+                response_code,
+                authorization_code,
+                payment_account_reference,
+            }
+        }
+    }
+}
+
 // AUTHORIZATION FLOW
 impl TryFrom<(ArchipelAmount, &types::PaymentsAuthorizeRouterData)> for ArchipelPaymentInformation {
     type Error = error_stack::Report<errors::ConnectorError>;
@@ -1011,10 +1052,9 @@ impl<F>
             ArchipelPaymentCase::Capture,
         ));
 
-        let connector_metadata: Option<serde_json::Value> =
-            ArchipelTransactionMetadata::from(&item.response)
-                .encode_to_value()
-                .ok();
+        let payment_metadata = ArchipelTransactionMetadata::amend_metadata(
+            (&item.data.request.connector_meta, &item.response)
+        );
 
         Ok(Self {
             status,
@@ -1025,7 +1065,7 @@ impl<F>
                 charge_id: None,
                 redirection_data: Box::new(None),
                 mandate_reference: Box::new(None),
-                connector_metadata,
+                connector_metadata: payment_metadata.encode_to_value().ok(),
                 network_txn_id: None,
                 connector_response_reference_id: None,
                 incremental_authorization_allowed: None,

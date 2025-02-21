@@ -1,8 +1,8 @@
 {
   "childrenOrder": [
     "Payments - Create",
+    "Payments - Check payment attempt",
     "Payments - Capture",
-    "Payments - Sync payment",
-    "Payments - Check payment attempt"
+    "Payments - Check payment attempt-copy"
   ]
 }

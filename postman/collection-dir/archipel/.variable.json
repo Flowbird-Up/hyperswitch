@@ -83,6 +83,11 @@
     {
       "key": "archipel_transaction_uuid",
       "value": ""
+    },
+    {
+      "key": "archipel_transaction_meta",
+      "value": "",
+      "type": "string"
     }
   ]
 }

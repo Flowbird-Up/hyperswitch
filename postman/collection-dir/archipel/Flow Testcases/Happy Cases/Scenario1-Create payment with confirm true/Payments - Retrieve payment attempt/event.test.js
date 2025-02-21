@@ -67,6 +67,20 @@ pm.test(
 );
 
 pm.test(
+  "[POST]::/payments - Payment Attempt has no error",
+  function () {
+    pm.expect(payment_attempt.error_message).to.be.null;
+  },
+);
+
+pm.test(
+  "[POST]::/payments - Payment Attempt has connector_metadata",
+  function () {
+    pm.expect(payment_attempt.connector_metadata).to.not.be.null;
+  },
+);
+
+pm.test(
   "[POST]::/payments - Archiepl response 'transactionId' is updated and not null",
   function () {
     pm.expect(payment_attempt.connector_metadata.transactionId).not.null
@@ -77,9 +91,21 @@ pm.test(
   },
 );
 
+
 pm.test(
-  "[POST]::/payments - Payment Attempt has no error",
+  "[POST]::/payments - Payment Attempt has connector_metadata 'transactionDate'",
   function () {
-    pm.expect(payment_attempt.error_message).to.be.null;
+    pm.expect(payment_attempt.connector_metadata.transactionId).to.be.string;
+  }
+);
+
+pm.test(
+  "[POST]::/payments - Payment Attempt has additional connector_metadata fiels",
+  function () {
+    pm.expect(payment_attempt.connector_metadata.responseCode).to.be.null;
+    pm.expect(payment_attempt.connector_metadata.authorizationCode).to.be.null;
+    pm.expect(payment_attempt.connector_metadata.issuerTransactionId).to.be.null;
+    pm.expect(payment_attempt.connector_metadata.financialNetworkCode).to.be.null;
+    pm.expect(payment_attempt.connector_metadata.paymentAccountReference).to.be.null;
   },
 );

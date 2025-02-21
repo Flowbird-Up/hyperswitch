@@ -8,6 +8,7 @@
     "Scenario4-Zero auth mandates",
     "Scenario5-Create a mandate and recurring payment",
     "Scenario6-Saved card flow",
+    "Scenario7-Void the payment",
     "Scenario8a-Incremental authorization",
     "Scenario8b-Incremental authorization with partial capture",
     "Scenario9a-Refund full payment",
