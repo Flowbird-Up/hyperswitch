@@ -1,0 +1,73 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: hyperswitch
+  namespace: argo-wf
+spec:
+  serviceAccountName: argo
+  entrypoint: pipeline
+  volumes:
+    - name: docker-sock  # ✅ Défini globalement
+      hostPath:
+        path: /var/run/docker.sock
+    - name: workspace
+      persistentVolumeClaim:
+        claimName: workspace
+  arguments:
+    parameters:
+      - name: repo-name
+        value: "hyperswitch"
+      - name: branch
+        value: "develop"
+      - name: tenant-id
+        value: "1234"
+      - name: platform-url
+        value: "https://185.149.63.6:19585/ArchiPEL/Transaction/v1"
+
+  templates:
+    - name: pipeline
+      dag:
+        tasks:
+          - name: checkout
+            templateRef:
+              name: checkout-template
+              template: checkout
+            arguments:
+              parameters:
+                - name: repo-name
+                  value: "{{workflow.parameters.repo-name}}"
+                - name: branch
+                  value: "{{workflow.parameters.branch}}"
+                - name: git-workspace
+                  value: "paymentproduct"
+          - name: cargo-test
+            templateRef:
+              name: cargo-test-template
+              template: pipeline
+              arguments:
+                parameters:
+                  - name: repo-name
+                    value: "{{workflow.parameters.repo-name}}"
+                  - name: branch
+                    value: "{{workflow.parameters.branch}}"
+                  - name: git-workspace
+                    value: "paymentproduct"
+                  - name: tenant-id
+                    value: "1234"
+                  - name: platform-url
+                    value: "https://185.149.63.6:19585/ArchiPEL/Transaction/v1"
+            dependencies: [checkout]
+
+          - name: docker-build
+            templateRef:
+              name: docker-build-hys-template
+              template: docker-build-hys
+            arguments:
+              parameters:
+                - name: repo-name
+                  value: "{{workflow.parameters.repo-name}}"
+                - name: branch
+                  value: "{{workflow.parameters.branch}}"
+                - name: git-workspace
+                  value: "paymentproduct"
+            dependencies: [checkout]

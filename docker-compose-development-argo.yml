@@ -1,0 +1,87 @@
+version: "3.8"
+
+volumes:
+  cargo_cache:
+  pg_data:
+  router_build_cache:
+  scheduler_build_cache:
+  drainer_build_cache:
+  redisinsight_store:
+
+networks:
+  router_net:
+
+services:
+  ### Dependencies
+  pg:
+    image: postgres:latest
+    ports:
+      - "5433:5432"
+    networks:
+      - router_net
+    volumes:
+      - pg_data:/VAR/LIB/POSTGRESQL/DATA
+    environment:
+      - POSTGRES_USER=db_user
+      - POSTGRES_PASSWORD=db_pass
+      - POSTGRES_DB=hyperswitch_db
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}"]
+      interval: 5s
+      retries: 3
+      start_period: 5s
+      timeout: 5s
+
+  redis-standalone:
+    image: redis:7
+    networks:
+      - router_net
+    ports:
+      - "6379:6379"
+
+
+  migration_runner:
+    image: rust:latest
+    command: "bash -c 'cargo install diesel_cli --no-default-features --features postgres && cargo install just && just migrate'"
+    working_dir: /app
+    networks:
+      - router_net
+    volumes:
+      - ./:/app
+    environment:
+      # format -> postgresql://DB_USER:DB_PASSWORD@HOST:PORT/DATABASE_NAME
+      - DATABASE_URL=postgresql://db_user:db_pass@pg:5433/hyperswitch_db
+
+  hyperswitch-server:
+    build:
+      dockerfile_inline: |
+        FROM rust:latest
+        RUN apt-get update && \
+            apt-get install -y protobuf-compiler
+        RUN rustup component add rustfmt clippy  
+    command: cargo run --bin router -- -f ./config/docker_compose.toml
+    working_dir: /app
+    ports:
+      - "8080:8080"
+    networks:
+      - router_net
+    volumes:
+      - ./:/app
+      - cargo_cache:/cargo_cache
+      - router_build_cache:/cargo_build_cache
+    environment:
+      - CARGO_HOME=/cargo_cache
+      - CARGO_TARGET_DIR=/cargo_build_cache
+    depends_on:
+      pg:
+        condition: service_healthy
+      redis-standalone:
+        condition: service_healthy
+    labels:
+      logs: "promtail"
+    healthcheck:
+      test: curl --fail http://localhost:8080/health || exit 1
+      interval: 120s
+      retries: 4
+      start_period: 20s
+      timeout: 10s

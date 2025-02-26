@@ -1,0 +1,155 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: hyperswitch
+  namespace: argo-wf
+spec:
+  entrypoint: pipeline
+  serviceAccountName: argo-workflow-sa
+  arguments:
+    parameters:
+      - name: repo-name
+        value: "hyperswitch"
+      - name: branch
+        value: "develop"
+      - name: tenant-id
+        value: "1234"
+      - name: platform-url
+        value: "https://185.149.63.6:19585/ArchiPEL/Transaction/v1"
+  volumes:
+    - name: git-secret
+      secret:
+        secretName: ssh-keys-pipeline-toolbox
+        defaultMode: 256
+    - name: git-config
+      configMap:
+        name: bitbucket-sshconfig
+    - name: docker-config
+      secret:
+        secretName: argo-wf-docker-registry-secret
+        items:
+        - key: .dockerconfigjson
+          path: config.json
+  imagePullSecrets:
+    - name: dirty-registry-secret
+    - name: docker-registry-secret
+  entrypoint: pipeline
+  synchronization:
+    mutex:
+      name: pass-devops-pipeline-toolbox-pipeline
+  templates:
+    - name: pipeline
+      dag:
+        tasks:
+          - name: checkout
+            templateRef:
+              name: git-clone-payment-tpl
+              template: git-clone-tpl
+            arguments: 
+              parameters:
+                - name: repo
+                  value: "git@bitbucket.org:paymentproduct"
+                - name: branch
+                  value: "develop"
+                - name: git-tag
+                  value: ""
+                - name: depth
+                  value: "1"
+          - name: docker-build
+            template: docker-build
+            arguments:
+              artifacts:
+                - name: workspace
+                  from: "{{tasks.checkout.outputs.artifacts.src}}"
+            dependencies: [checkout]
+          # - name: cargo-test
+          #   template: cargo-test
+          #   dependencies: [checkout]
+          # 
+
+    # - name: checkout
+    #   container:
+    #     image: bitnami/git
+    #     command: [sh, -c]
+    #     args:
+    #       - |
+    #         set -ex
+
+    #         echo "🔹 Configuration SSH..."
+
+    #         ls -la /secret
+    #         mkdir -p ~/.ssh
+    #         cp /secret/id_rsa ~/.ssh/id_rsa
+    #         chmod 600 ~/.ssh/id_rsa
+    #         ssh-keyscan -H bitbucket.org >> ~/.ssh/known_hosts
+
+    #         echo "🔹 Vérification de la connexion SSH..."
+    #         ssh -T git@bitbucket.org || exit 1
+
+    #         echo "🔹 Clonage du dépôt {{workflow.parameters.repo-name}}..."
+    #         git clone {{workflow.parameters.git-workspace}}/{{workflow.parameters.repo-name}} /workspace/{{workflow.parameters.repo-name}}  || exit 1
+
+    #         echo "🔹 Contenu du dossier après clonage :"
+    #         ls -la /workspace/{{workflow.parameters.repo-name}} 
+
+    #         echo "🔹 Git clone success"   
+    #     volumeMounts:
+    #       - name: ssh-secret-paymentproduct
+    #         mountPath: /secret
+    #     securityContext:
+    #       privileged: true
+    #   volumes:
+    #     - name: ssh-secret-paymentproduct
+    #       secret:
+    #         secretName: ssh-secret-paymentproduct
+    #   outputs:
+    #     artifacts:
+    #       - name: src
+    #         path: /src
+
+    - name: docker-build
+      inputs:
+        artifacts:
+          - name: workspace
+            path: /workspace
+      container:
+        image:  docker-registry.streetsmart.parkeon.com/debian:bookworm 
+        securityContext:
+          privileged: true
+        command: ["sh", "-c"]
+        args:
+          - |
+            set -ex
+
+            ls -lah /workspace
+
+            echo "🔹 Vérification du répertoire de build..."
+            ls -lah /workspace/|| { echo "❌ Le répertoire est vide ! Le checkout a peut-être échoué."; exit 1; }
+
+            echo "🔹 Mise à jour des paquets et installation de Docker, Curl et Rust..."
+            apt-get update && apt-get install -y curl build-essential docker.io openssl
+
+            echo "🔹 Lancement du démon Docker..."
+            service docker start
+            sleep 5
+
+            echo "🔹 Activation de BuildKit..."
+            export DOCKER_BUILDKIT=1
+
+            echo "🔹 Construction de l'image Docker avec BuildKit..."       
+            cd /workspace
+            ls -lah /workspace/
+            docker build --file /workspace/Dockerfile --build-arg "BINARY=scheduler" --build-arg "SCHEDULER_FLOW=consumer" --build-arg "FEATURE=build" --tag registry-archipel.parkeon.com:5002/hyperswitch-consumer .
+            
+            echo "✅ Docker Build termine"
+        volumeMounts:
+          - name: ssh-key
+            mountPath: /secret
+      volumes:
+        - name: ssh-key
+          secret:
+            secretName: ssh-secret-paymentproduct
+      outputs:
+        artifacts:
+          - name: workspace
+            path: /workspace
