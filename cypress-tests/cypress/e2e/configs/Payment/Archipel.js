@@ -1,5 +1,6 @@
 import { customerAcceptance } from "./Commons.js";
 
+
 const successfulNo3DSCardDetails = {
   card_number: "4242424242424242",
   card_exp_month: "01",
