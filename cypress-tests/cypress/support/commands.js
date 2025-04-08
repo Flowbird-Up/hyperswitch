@@ -1574,7 +1574,7 @@ Cypress.Commands.add(
       `${configInfo.merchantConnectorPrefix}Id`
     );
     const setupFutureUsage = globalState.get("setupFutureUsage");
-    const NTID = globalState.get("network_transaction_id");
+    const networkTransactionId = globalState.get("network_transaction_id");
     const paymentIntentID = globalState.get("paymentID");
     const profileId = globalState.get(`${configInfo.profilePrefix}Id`);
     const url = `${baseUrl}/payments/${paymentIntentID}/confirm`;
@@ -1641,7 +1641,10 @@ Cypress.Commands.add(
                 expect(resData.body[key], [key]).to.deep.equal(
                   response.body[key]
                 );
-                if (setupFutureUsage === "off_session" && NTID === null) {
+                if (
+                  setupFutureUsage === "off_session" &&
+                  networkTransactionId === null
+                ) {
                   expect(
                     response.body.connector_mandate_id,
                     "connector_mandate_id"
@@ -2550,7 +2553,7 @@ Cypress.Commands.add(
       `${configInfo.merchantConnectorPrefix}Id`
     );
     const setupFutureUsage = globalState.get("setupFutureUsage");
-    const NTID = globalState.get("network_transaction_id");
+    const networkTransactionId = globalState.get("network_transaction_id");
     for (const key in reqData) {
       requestBody[key] = reqData[key];
     }
@@ -2621,7 +2624,10 @@ Cypress.Commands.add(
             } else if (response.body.authentication_type === "no_three_ds") {
               for (const key in resData.body) {
                 expect(resData.body[key]).to.equal(response.body[key]);
-                if (setupFutureUsage === "off_session" && NTID === null) {
+                if (
+                  setupFutureUsage === "off_session" &&
+                  networkTransactionId === null
+                ) {
                   expect(
                     response.body.connector_mandate_id,
                     "connector_mandate_id"
@@ -2650,7 +2656,10 @@ Cypress.Commands.add(
             } else if (response.body.authentication_type === "no_three_ds") {
               for (const key in resData.body) {
                 expect(resData.body[key]).to.equal(response.body[key]);
-                if (setupFutureUsage === "off_session" && NTID === null) {
+                if (
+                  setupFutureUsage === "off_session" &&
+                  networkTransactionId === null
+                ) {
                   expect(
                     response.body.connector_mandate_id,
                     "connector_mandate_id"
