@@ -1,0 +1,36 @@
+apiVersion: v2
+name: hyperswitch-helm-chart
+description: A Helm chart for deploying hyperswitch
+version: 0.1.0
+
+replicaCount: 2
+
+image:
+  repository: hyperswitch-repo
+  pullPolicy: IfNotPresent
+  tag: latest
+
+service:
+  enabled: true
+  name: hyperswitch-service
+  type: ClusterIP
+  port: 8080
+  targetPort: 8080
+
+ingress:
+  enabled: false
+  name: ""
+  path: /
+  hosts:
+    - host: hyperswitch.local
+      paths:
+        - /
+  tls: [] 
+
+resources: {}
+  
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}

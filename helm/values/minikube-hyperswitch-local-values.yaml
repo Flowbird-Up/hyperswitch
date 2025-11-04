@@ -1,0 +1,55 @@
+apiVersion: v2
+name: hyperswitch-helm-chart
+description: A Helm chart for deploying hyperswitch on local Minikube
+version: 0.1.0
+
+replicaCount: 1
+
+image:
+  repository: hyperswitch-repo
+  pullPolicy: IfNotPresent
+  tag: latest
+
+service:
+  enabled: true
+  name: hyperswitch-service
+  type: NodePort
+  port: 80
+  targetPort: 8080
+  nodePort: 30000
+
+ingress:
+  enabled: true
+  name: hyperswitch-ingress
+  path: /
+  hosts:
+    - host: hyperswitch.local
+      paths:
+        - /
+  tls: []
+
+resources:
+  limits:
+    cpu: 200m
+    memory: 256Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+# Configuration spécifique Minikube
+minikube:
+  enabled: true
+  tunnel: true
+  
+# Variables d'environnement pour le développement local
+env:
+  - name: ENV
+    value: "local"
+  - name: DEBUG
+    value: "true"

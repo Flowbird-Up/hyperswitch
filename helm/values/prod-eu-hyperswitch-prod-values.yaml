@@ -1,0 +1,54 @@
+apiVersion: v2
+name: hyperswitch-helm-chart
+description: A Helm chart for deploying hyperswitch in EU production
+version: 0.1.0
+
+replicaCount: 3
+
+image:
+  repository: hyperswitch-repo
+  pullPolicy: IfNotPresent
+  tag: latest
+
+service:
+  enabled: true
+  name: hyperswitch-service
+  type: ClusterIP
+  port: 80
+  targetPort: 8080
+
+ingress:
+  enabled: true
+  name: hyperswitch-ingress
+  path: /
+  hosts:
+    - host: hyperswitch.prod-eu.example.com
+      paths:
+        - /
+  tls:
+    - secretName: hyperswitch-tls
+      hosts:
+        - hyperswitch.prod-eu.example.com
+
+resources:
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+  requests:
+    cpu: 500m
+    memory: 512Mi
+  
+nodeSelector:
+  zone: eu-west-1
+
+tolerations: []
+
+affinity:
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: region
+          operator: In
+          values:
+          - europe
