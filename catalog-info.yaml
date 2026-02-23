@@ -1,0 +1,13 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: hyperswitch
+  description: "An open source payments switch written in Rust to make payments fast, reliable and affordable"
+  annotations:
+    github.com/project-slug: Flowbird-Up/hyperswitch
+  tags:
+    - gha
+spec:
+  type: service
+  lifecycle: production
+  owner: open-payment-reporting
