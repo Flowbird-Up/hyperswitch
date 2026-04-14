@@ -16,7 +16,7 @@ masking = { version = "0.1.0", path = "../masking" }
 
 # Third party crates
 async-trait = "0.1.79"
-bytes = "1.6.0"
+bytes = "1.11.1"
 error-stack = "0.4.1"
 http = "0.2.12"
 mime = "0.3.17"
