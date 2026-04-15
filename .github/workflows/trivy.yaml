@@ -1,0 +1,36 @@
+name: Trivy
+
+on:
+  schedule:
+    - cron: '0 2 * * 0'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+  checks: write
+  security-events: write
+  actions: read
+
+concurrency:
+  group: trivy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  trivy:
+    uses: flowbird-group/github-cicd/.github/workflows/_trivy-scans-all.yml@main
+    secrets:
+      SCANNER_APP_ID: ${{ secrets.SCANNER_APP_ID }}
+      SCANNER_APP_PEM: ${{ secrets.SCANNER_APP_PEM }}
+      DOCKER_USERNAME: ${{ secrets.FW_USERNAME }}
+      DOCKER_PASSWORD: ${{ secrets.FW_PASSWORD }}
+    permissions:
+      contents: read
+      packages: write
+      checks: write
+      security-events: write
+      actions: read
+    with:
+      docker_registry: up-ci-docker-pull.flowbird.group
+      license_display_summary: true
+      upload_artifacts: true
